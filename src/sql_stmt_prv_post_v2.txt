@@ -1,0 +1,19 @@
+SELECT 
+    po1.id AS pgm_id,
+    po1.post_title AS pgm_title,
+    DATE_FORMAT(po1.post_date, '%Y-%m-%d %H:00 %a') AS pgm_start,
+    DAYOFWEEK(po1.post_date) AS pgm_day
+FROM wp_posts po1
+  LEFT JOIN wp_term_relationships tr1 ON tr1.object_id = po1.id
+  LEFT JOIN wp_term_taxonomy tx1 ON tx1.term_taxonomy_id = tr1.term_taxonomy_id
+WHERE post_type = 'programma'
+  AND po1.post_title = '@title'
+  AND po1.post_date < '@ymd_woj_slot'
+  AND po1.post_date > DATE_ADD(@ymd_woj_slot, INTERVAL -60 DAY)
+  AND DAYOFWEEK(po1.post_date) = @day_of_week
+  AND HOUR(po1.post_date) = @hour
+  AND tx1.term_taxonomy_id = 5
+ORDER BY 3 DESC
+LIMIT 1
+;
+
