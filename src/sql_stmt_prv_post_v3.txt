@@ -1,0 +1,19 @@
+SELECT 
+    DATE_FORMAT(po1.post_date, '%Y-%m-%d %H:00') AS ts_rewind_irr
+FROM
+    wp_posts po1
+        LEFT JOIN
+    wp_term_relationships tr1 ON tr1.object_id = po1.id
+        LEFT JOIN
+    wp_term_taxonomy tx1 ON tx1.term_taxonomy_id = tr1.term_taxonomy_id
+WHERE
+    post_type = 'programma'
+        AND po1.post_title REGEXP '@title_NL'
+        AND po1.post_date < '@slot_ts'
+        AND po1.post_date > DATE_ADD('@slot_ts', INTERVAL -90 DAY)
+        AND DAYOFWEEK(po1.post_date) = @int_parent_day
+        AND HOUR(po1.post_date) = @parent_hour
+        AND tx1.term_taxonomy_id = 5
+ORDER BY 1 DESC
+LIMIT 1
+;

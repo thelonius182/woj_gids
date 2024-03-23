@@ -1,14 +1,14 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Create a WoJ Schedule Week
+# Create a WoJ "schedule week" (WP-gids)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # the packages to use ----
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, stringr, yaml, readr, chron, rio,
-               RMySQL, keyring)
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, 
+               stringr, yaml, readr, rio, RMySQL, keyring)
 
 source("src/functions.R", encoding = "UTF-8")
 config <- read_yaml("config.yaml")
-qry_prv_post <- read_lines("src/sql_stmt_prv_post_v2.txt")
+qry_rewind_post <- read_file("src/sql_stmt_prv_post_v3.txt")
 
 # say "Hi" to Google
 drive_auth(email = "cz.teamservice@gmail.com")
@@ -23,7 +23,14 @@ download_home <- "C:/Users/nipper/Downloads/cz_downloads/"
 moro <- "1LdBjK5hcpl8m1ZdcZujWWcsx7nLJPY8Gt69mjN8QS9A"
 gs_path <- paste0(download_home, "tib_moro.tsv")
 drive_download(paste0(gs_home, moro), path = gs_path, overwrite = T)
-tib_moro <- read_tsv(file = gs_path, locale = locale(encoding = "UTF-8"), col_types = "iiciiiciccccc")
+tib_moro <- read_tsv(file = gs_path, locale = locale(encoding = "UTF-8"), col_types = "iiciiiciccccc") 
+
+# rec_id's should be unique
+tib_moro_dups <- tib_moro |> select(rec_id) |> group_by(rec_id) |> mutate(n = n()) |> filter(n > 1)
+
+if (nrow(tib_moro_dups) > 0) {
+  stop("WoJ modelrooster has duplicate rec_id's")
+}
 
 # load gidsinfo ----
 gidsinfo <- "16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA"
@@ -40,7 +47,7 @@ if (nrow(bcs_without_gi) > 0) {
 }
 
 # get woj gidsinfo
-woj_gidsinfo <- tib_gidsinfo |> filter(!is.na(woj_bcid)) |> 
+woj_gidsinfo <- tib_gidsinfo |> 
   select(woj_bcid, tit_nl = `titel-NL`, tit_en = `titel-EN`, prod_taak_nl = `productie-1-taak`, 
          prod_mdw = `productie-1-mdw`, genre_1_nl = `genre-1-NL`, genre_2_nl = `genre-2-NL`,
          txt_nl = `std.samenvatting-NL`, txt_en = `std.samenvatting-EN`) |> arrange(woj_bcid) |> 
@@ -51,53 +58,48 @@ woj_gidsinfo <- tib_gidsinfo |> filter(!is.na(woj_bcid)) |>
   left_join(tib_gidsvertalingen, by = c("genre_2_nl" = "item-NL")) |> 
   rename(genre_2_en = `item-EN`) |> 
   select(woj_bcid, tit_nl, tit_en, prod_taak_nl, prod_taak_en, prod_mdw, 
-         genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en) 
-  
-# Set new first day of gidsweek ----
-giva_home <- "C:/cz_salsa/config/giva_start.txt"
-giva_latest <- import(giva_home) |> mutate(latest_run = ymd(latest_run))
+         genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en) |> 
+  mutate(woj_bcid = as.integer(woj_bcid))
 
-current_run_start <- giva_latest$latest_run + ddays(7)
-# flog.info("Dit wordt de Gidsweek van %s", 
-#           format(current_run_start, "%A %d %B %Y"),
-#           name = "wpgidsweeklog")
-
-# cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-# but to the schedule-template both Thursdays are the same, as the
-# template is undated.
-# Both Thursday parts will separate when the schedule gets 'calendarized'
-current_run_stop <- current_run_start + ddays(7)
+rm(tib_gidsinfo, tib_gidsvertalingen)  
 
 # create time series ----
-cz_slot_days <- seq(from = current_run_start, to = current_run_stop, by = "days")
-cz_slot_hours <- seq(0, 23, by = 1)
-cz_slot_dates <- merge(cz_slot_days, chron(time = paste(cz_slot_hours, ":", 0, ":", 0)))
-colnames(cz_slot_dates) <- c("slot_date", "slot_time")
-cz_slot_dates$date_time <- as.POSIXct(paste(cz_slot_dates$slot_date, cz_slot_dates$slot_time), "GMT")
-row.names(cz_slot_dates) <- NULL
-cz_slot_dates.1 <- as_tibble(cz_slot_dates) |> select(date_time) |> 
-  mutate(day = wday(date_time, label = T, abbr = T),
-         cycle = 1 + (day(date_time) - 1) %/% 7L,
-         start = hour(date_time)) |> 
-  arrange(date_time)
+# cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
+cz_week_start <- ymd_hm("2024-03-28 13:00")
+cz_week_slots <- slot_sequence(cz_week_start)
 
-# combine with modelrooster ----
-cz_slot_dates.2 <- cz_slot_dates.1 |> inner_join(tib_moro)
+# combine with 'modelrooster' ----
+cz_week_sched.1 <- cz_week_slots |> inner_join(tib_moro, by = join_by(day, week_vd_mnd, start))
 
-# list runs Thursday to Thursday; make it run from 13:00 - 13:00
-df_start <- min(cz_slot_dates.2$date_time)
-hour(df_start) <- 13
-df_stop <- max(cz_slot_dates.2$date_time)
-hour(df_stop) <- 13
+# prep rewinds ----
+cz_week_sched.2 <- cz_week_sched.1 |> rowwise() |> 
+  mutate(rewind = list(slot_delta(slot_label, parent))) |> unnest_wider(rewind)
 
-cz_slot_dates.3 <- cz_slot_dates.2 |> filter(date_time >= df_start & date_time < df_stop) |> 
-  mutate()
+# add regular rewinds ----
+cz_week_sched.3 <- cz_week_sched.2 |> 
+  mutate(ts_rewind = if_else(regular_rewind, 
+                             update(slot_ts + days(delta), hour = parse_number(parent)), 
+                             NA_Date_))
+# add irregular rewinds ----
+# . prep gidsinfo
+rewind_gidsinfo <- woj_gidsinfo |> filter(!is.na(woj_bcid)) 
+# . prep rewinds
+cz_week_irr_rew <- cz_week_sched.3 |> filter(!regular_rewind & 0 <= delta & delta < 99) |> 
+  select(rec_id, slot_ts, parent, broadcast_id) |> 
+  inner_join(rewind_gidsinfo, by = join_by(broadcast_id == woj_bcid))
 
+# coonect to greenhost database, to fetch the previous post
 wp_conn <- get_wp_conn("dev")
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
 }
 
-qry <- "select count(*) as n from wp_posts where post_type = 'programma_woj'"
-p1 <- dbGetQuery(wp_conn, qry)
+# SQL uses zo=1, ma=2, etc. R uses ma=1, di=2, etc. Prep a conversion list
+r2sql_wday <- c("zo", "ma", "di", "wo", "do", "vr", "za")
+
+cz_week_irr_rew.1 <- cz_week_irr_rew |> rowwise() |> 
+  mutate(rewind_ts = list(fetch_rewind_ts(tit_nl, slot_ts, parent))) |> unnest(rewind_ts)
+
+# integrate irregular rewinds
+cz_week_sched.4 <- cz_week_sched.3 |> left_join(cz_week_irr_rew.1, by = join_by(rec_id))
