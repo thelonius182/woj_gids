@@ -3,8 +3,8 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # the packages to use ----
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, 
-               stringr, yaml, readr, rio, RMySQL, keyring)
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs,
+               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite)
 
 source("src/functions.R", encoding = "UTF-8")
 config <- read_yaml("config.yaml")
@@ -25,7 +25,12 @@ gs_path <- paste0(download_home, "tib_moro.tsv")
 drive_download(paste0(gs_home, moro), path = gs_path, overwrite = T)
 tib_moro <- read_tsv(file = gs_path, locale = locale(encoding = "UTF-8"), col_types = "iiciiiciccccc") 
 
-# rec_id's should be unique
+#  + . check modelrooster length ----
+if (sum(tib_moro$minutes) != 50400) {
+  stop("WoJ modelrooster length is wrong; should be 50.400 minutes")
+}
+
+#  + . rec_id's should be unique ----
 tib_moro_dups <- tib_moro |> select(rec_id) |> group_by(rec_id) |> mutate(n = n()) |> filter(n > 1)
 
 if (nrow(tib_moro_dups) > 0) {
@@ -71,9 +76,22 @@ cz_week_slots <- slot_sequence(cz_week_start)
 # combine with 'modelrooster' ----
 cz_week_sched.1 <- cz_week_slots |> inner_join(tib_moro, by = join_by(day, week_vd_mnd, start))
 
+#  + . check schedule length ----
+if (sum(cz_week_sched.1$minutes) != 10080) {
+  stop("CZ-week + modelrooster length is wrong; should be 10.080 minutes")
+}
+
+# combine with 'wp-gidsinfo' ----
+cz_week_sched.1a <- cz_week_sched.1 |> inner_join(woj_gidsinfo, by = join_by(broadcast_id == woj_bcid))
+
+#  + . check schedule length ----
+if (sum(cz_week_sched.1a$minutes) != 10080) {
+  stop("CZ-week + gidsinfo length is wrong; should be 10.080 minutes")
+}
+
 # prep rewinds ----
-cz_week_sched.2 <- cz_week_sched.1 |> rowwise() |> 
-  mutate(rewind = list(slot_delta(slot_label, parent))) |> unnest_wider(rewind)
+cz_week_sched.2 <- cz_week_sched.1a |> rowwise() |> 
+  mutate(rewind = list(slot_delta(slot_label, parent, live))) |> unnest_wider(rewind)
 
 # add regular rewinds ----
 cz_week_sched.3 <- cz_week_sched.2 |> 
@@ -81,25 +99,101 @@ cz_week_sched.3 <- cz_week_sched.2 |>
                              update(slot_ts + days(delta), hour = parse_number(parent)), 
                              NA_Date_))
 # add irregular rewinds ----
-# . prep gidsinfo
-rewind_gidsinfo <- woj_gidsinfo |> filter(!is.na(woj_bcid)) 
-# . prep rewinds
-cz_week_irr_rew <- cz_week_sched.3 |> filter(!regular_rewind & 0 <= delta & delta < 99) |> 
-  select(rec_id, slot_ts, parent, broadcast_id) |> 
-  inner_join(rewind_gidsinfo, by = join_by(broadcast_id == woj_bcid))
+# cz_week_irr_rew <- cz_week_sched.3 |> filter(!regular_rewind & delta < 99) |> 
+#   select(rec_id, slot_ts, parent, broadcast_id) |> 
+#   inner_join(rewind_gidsinfo, by = join_by(broadcast_id == woj_bcid))
 
-# coonect to greenhost database, to fetch the previous post
+# coonect to greenhost database, to fetch the posts for those irregular ones
 wp_conn <- get_wp_conn("dev")
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
 }
 
-# SQL uses zo=1, ma=2, etc. R uses ma=1, di=2, etc. Prep a conversion list
+# SQL uses zo=1, ma=2, etc. but R uses ma=1, di=2, etc. Prep a conversion list
 r2sql_wday <- c("zo", "ma", "di", "wo", "do", "vr", "za")
 
-cz_week_irr_rew.1 <- cz_week_irr_rew |> rowwise() |> 
-  mutate(rewind_ts = list(fetch_rewind_ts(tit_nl, slot_ts, parent))) |> unnest(rewind_ts)
+cz_week_sched.4a <- cz_week_sched.3 |> filter(!regular_rewind & delta < 99) |>  rowwise() |> 
+  mutate(rewind_ts_all = list(fetch_rewind_ts(tit_nl, slot_ts, parent))) |> unnest(rewind_ts_all) |> 
+  mutate(ts_rewind = ymd_hm(ts_rewind_irr)) |> select(-ts_rewind_irr)
 
-# integrate irregular rewinds
-cz_week_sched.4 <- cz_week_sched.3 |> left_join(cz_week_irr_rew.1, by = join_by(rec_id))
+cz_week_sched.4b <- cz_week_sched.3 |> anti_join(cz_week_sched.4a, by = join_by(rec_id))
+
+cz_week_sched.5 <- bind_rows(cz_week_sched.4a, cz_week_sched.4b) |> arrange(rec_id)
+
+#  + . check schedule length ----
+if (sum(cz_week_sched.5$minutes) != 10080) {
+  stop("CZ-week + replays length is wrong; should be 10.080 minutes")
+}
+
+# prep json ----
+# . + originals with 1 genre ----
+tib_json_ori_gen1 <- cz_week_sched.5 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
+  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, -genre_2_nl, -genre_2_en) |> 
+  mutate(obj_name = fmt_utc_ts(obj_name), 
+         stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
+         start = format(start, "%Y-%m-%d %H:%M"),
+         `post-type` = "programma_woj") |> 
+  select(obj_name, `post-type`, start, stop, everything(), -minutes) |> 
+  rename(`titel-nl` = tit_nl,
+         `titel-en` = tit_en,
+         `genre-1-nl` = genre_1_nl,
+         `genre-1-en` = genre_1_en,
+         `std.samenvatting-nl` = txt_nl,
+         `std.samenvatting-en` = txt_en,
+         `productie-1-taak-nl` = prod_taak_nl,
+         `productie-1-taak-en` = prod_taak_en,
+         `productie-1-mdw` = prod_mdw)
+
+json_ori_gen1 <- woj2json(tib_json_ori_gen1)
+
+# . + originals with 2 genres ----
+tib_json_ori_gen2 <- cz_week_sched.5 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
+  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en) |> 
+  mutate(obj_name = fmt_utc_ts(obj_name), 
+         stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
+         start = format(start, "%Y-%m-%d %H:%M"),
+         `post-type` = "programma_woj") |> 
+  select(obj_name, `post-type`, start, stop, everything(), -minutes) |> 
+  rename(`titel-nl` = tit_nl,
+         `titel-en` = tit_en,
+         `genre-1-nl` = genre_1_nl,
+         `genre-1-en` = genre_1_en,
+         `genre-2-nl` = genre_2_nl,
+         `genre-2-en` = genre_2_en,
+         `std.samenvatting-nl` = txt_nl,
+         `std.samenvatting-en` = txt_en,
+         `productie-1-taak-nl` = prod_taak_nl,
+         `productie-1-taak-en` = prod_taak_en,
+         `productie-1-mdw` = prod_mdw)
+
+json_ori_gen2 <- woj2json(tib_json_ori_gen2)
+
+# . + replays ----
+tib_json_rep <- cz_week_sched.5 |> filter(!is.na(ts_rewind)) |> 
+  select(obj_name = slot_ts, start = slot_ts, minutes, ts_rewind) |> 
+  mutate(obj_name = fmt_utc_ts(obj_name), 
+         stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
+         start = format(start, "%Y-%m-%d %H:%M"),
+         `post-type` = "programma_woj",
+         `herhaling-van-post-type` = "programma",
+         `herhaling-van` = format(ts_rewind, "%Y-%m-%d %H:%M")) |> 
+  select(obj_name, `post-type`, start, stop, everything(), -minutes, -ts_rewind)
+
+json_rep <- woj2json(tib_json_rep)
+
+# . + join them ----
+cz_week_json_qfn <- file_temp(pattern = "cz_week_json", ext = "json")
+file_create(cz_week_json_qfn)
+write_file(json_ori_gen1, cz_week_json_qfn, append = F)
+write_file(json_ori_gen2, cz_week_json_qfn, append = T)
+write_file(json_rep, cz_week_json_qfn, append = T)
+
+# the file still has 3 intact json-objects. Remove the inner boundaries to make it a single object
+temp_json_file.1 <- read_file(cz_week_json_qfn)
+temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
+
+# create final json-file ----
+final_json_qfn <- paste0("WoJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
+write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
+           append = F)

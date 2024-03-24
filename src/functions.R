@@ -54,8 +54,10 @@ get_rewind_ts_old <- function(pm_rec_id) {
   dbGetQuery(wp_conn, sql_stm)
 }
 
+# woj-slots that precede the universe one need another, earlier replay post.
+# The same goes for woj-slots that replay live universe slots 
 fetch_rewind_ts <- function(pm_tit_nl, pm_slot_ts, pm_parent) {
-  # browser()
+  
   # set sql parameters
   sq_int_parent_day <- which(r2sql_wday == str_sub(pm_parent, 1, 2)) |> as.character()
   sq_parent_hour <- parse_number(pm_parent) |> as.character()
@@ -72,20 +74,24 @@ fetch_rewind_ts <- function(pm_tit_nl, pm_slot_ts, pm_parent) {
 }
 
 # compare two slot-id's
-slot_delta <- function(slot_label_a, slot_label_b) {
+slot_delta <- function(slot_label_a, slot_label_b, pm_live) {
   
+  # mark non-universe slots
   if (is.na(slot_label_b)) return(list(delta = 99, regular_rewind = F))
   
+  # see which one comes first
   ts1_idx <- which(cz_week_slots$slot_label == slot_label_a)
   ts2_idx <- which(cz_week_slots$slot_label == slot_label_b)
   
-  # Extract their timestamps
+  # Extract their timestamps (and set to midnight)
   ts1_ts <- cz_week_slots$slot_ts[[ts1_idx]]
   hour(ts1_ts) <- 0
   ts2_ts <- cz_week_slots$slot_ts[[ts2_idx]]
   hour(ts2_ts) <- 0
+  
+  # return result
   list(delta = time_length(ts1_ts %--% ts2_ts, unit = "day"), 
-       regular_rewind = if_else(ts1_idx > ts2_idx, T, F))
+       regular_rewind = if_else(ts1_idx > ts2_idx & pm_live != "Y", T, F))
 }
 
 slot_sequence <- function(ts_start) {
@@ -98,4 +104,23 @@ slot_sequence <- function(ts_start) {
            week_vd_mnd = 1 + (day(slot_ts) - 1) %/% 7L,
            start = hour(slot_ts),
            slot_label = paste0(day, hour(slot_ts)))
+}
+
+fmt_utc_ts <- function(some_date) {
+  format(some_date, "%Y-%m-%d_%a%H-%Z%z") %>%
+    str_replace("UTC", "GMT") %>%
+    str_sub(1, 22)
+}
+
+woj2json <- function(pm_tib_json) {
+  
+  # Convert tibble to a list of named lists
+  list_json <- lapply(1:nrow(pm_tib_json), function(i1) {
+    as.list(pm_tib_json[i1, -1])
+  })
+  
+  # set obj_name as the key
+  names(list_json) <- pm_tib_json$obj_name
+  
+  toJSON(list_json, pretty = TRUE, auto_unbox = T)
 }
