@@ -61,6 +61,7 @@ fetch_rewind_ts <- function(pm_tit_nl, pm_slot_ts, pm_parent) {
   # set sql parameters
   sq_int_parent_day <- which(r2sql_wday == str_sub(pm_parent, 1, 2)) |> as.character()
   sq_parent_hour <- parse_number(pm_parent) |> as.character()
+  pm_tit_nl <- if_else(pm_tit_nl == "¡Mambo!", "Mambo", pm_tit_nl)
 
   # prep query  
   sql_stm <- qry_rewind_post |> 

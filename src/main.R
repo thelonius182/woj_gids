@@ -99,11 +99,8 @@ cz_week_sched.3 <- cz_week_sched.2 |>
                              update(slot_ts + days(delta), hour = parse_number(parent)), 
                              NA_Date_))
 # add irregular rewinds ----
-# cz_week_irr_rew <- cz_week_sched.3 |> filter(!regular_rewind & delta < 99) |> 
-#   select(rec_id, slot_ts, parent, broadcast_id) |> 
-#   inner_join(rewind_gidsinfo, by = join_by(broadcast_id == woj_bcid))
-
-# coonect to greenhost database, to fetch the posts for those irregular ones
+# + . coonect to greenhost-DB ----
+# ... to fetch the posts for those irregular ones
 wp_conn <- get_wp_conn("dev")
 
 if (typeof(wp_conn) != "S4") {
@@ -117,6 +114,8 @@ cz_week_sched.4a <- cz_week_sched.3 |> filter(!regular_rewind & delta < 99) |>  
   mutate(rewind_ts_all = list(fetch_rewind_ts(tit_nl, slot_ts, parent))) |> unnest(rewind_ts_all) |> 
   mutate(ts_rewind = ymd_hm(ts_rewind_irr)) |> select(-ts_rewind_irr)
 
+dbDisconnect(wp_conn)
+
 cz_week_sched.4b <- cz_week_sched.3 |> anti_join(cz_week_sched.4a, by = join_by(rec_id))
 
 cz_week_sched.5 <- bind_rows(cz_week_sched.4a, cz_week_sched.4b) |> arrange(rec_id)
@@ -125,6 +124,9 @@ cz_week_sched.5 <- bind_rows(cz_week_sched.4a, cz_week_sched.4b) |> arrange(rec_
 if (sum(cz_week_sched.5$minutes) != 10080) {
   stop("CZ-week + replays length is wrong; should be 10.080 minutes")
 }
+
+# create the WoJ playlist week
+source("src/playlistweek.R", encoding = "UTF-8")
 
 # prep json ----
 # . + originals with 1 genre ----
