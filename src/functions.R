@@ -1,3 +1,4 @@
+
 get_wp_conn <- function(pm_db_type = "prd") {
   
   if (pm_db_type == "prd") {
@@ -124,4 +125,25 @@ woj2json <- function(pm_tib_json) {
   names(list_json) <- pm_tib_json$obj_name
   
   toJSON(list_json, pretty = TRUE, auto_unbox = T)
+}
+
+get_mal_conn <- function() {
+  
+  # just to prevent uploading credentials to github
+  basie_creds <- read_rds("C:/Users/nipper/Documents/BasieBeats/basie.creds")
+  
+  result <- tryCatch( 
+    dbConnect(RPostgres::Postgres(),
+              dbname = 'mairlist7', 
+              host = '192.168.178.91', 
+              port = 5432,
+              user = basie_creds$usr,
+              password = basie_creds$pwd),
+    error = function(cond) {
+      flog.error("mAirList database unavailable", name = "bsblog")
+      return("connection-error")
+    }
+  )
+  
+  return(result)
 }

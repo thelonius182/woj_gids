@@ -125,8 +125,8 @@ if (sum(cz_week_sched.5$minutes) != 10080) {
   stop("CZ-week + replays length is wrong; should be 10.080 minutes")
 }
 
-# create the WoJ playlist week
-source("src/playlistweek.R", encoding = "UTF-8")
+# create the WoJ playlist week schema
+source("src/schema_playlistweek.R", encoding = "UTF-8")
 
 # prep json ----
 # . + originals with 1 genre ----
