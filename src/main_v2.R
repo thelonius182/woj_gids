@@ -66,8 +66,6 @@ woj_gidsinfo <- tib_gidsinfo |>
          genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en) |> 
   mutate(woj_bcid = as.integer(woj_bcid))
 
-rm(tib_gidsinfo, tib_gidsvertalingen)  
-
 # create time series ----
 # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
 cz_week_start <- ymd_hm("2024-03-28 13:00")
@@ -82,43 +80,71 @@ if (sum(cz_week_sched.1$minutes) != 10080) {
 }
 
 # combine with 'wp-gidsinfo' ----
-cz_week_sched.1a <- cz_week_sched.1 |> inner_join(woj_gidsinfo, by = join_by(broadcast_id == woj_bcid))
+cz_week_sched.2 <- cz_week_sched.1 |> inner_join(woj_gidsinfo, by = join_by(broadcast_id == woj_bcid))
 
 #  + . check schedule length ----
-if (sum(cz_week_sched.1a$minutes) != 10080) {
+if (sum(cz_week_sched.2$minutes) != 10080) {
   stop("CZ-week + gidsinfo length is wrong; should be 10.080 minutes")
 }
 
-# prep rewinds ----
-cz_week_sched.2 <- cz_week_sched.1a |> rowwise() |> 
-  mutate(rewind = list(slot_delta(slot_label, parent, live))) |> unnest_wider(rewind)
+# prepare rewinds ----
+# - the list of universe broadcasts to share with woj. Use the list from nipper-studio
+ns_weken <- read_rds("C:/cz_salsa/cz_exchange/nipperstudio_week.RDS")
 
-# add regular rewinds ----
-cz_week_sched.3 <- cz_week_sched.2 |> 
-  mutate(ts_rewind = if_else(regular_rewind, 
-                             update(slot_ts + days(delta), hour = parse_number(parent)), 
-                             NA_Date_))
-# add irregular rewinds ----
-# + . coonect to greenhost-DB ----
-# ... to fetch the posts for those irregular ones
+# add the corresponding broadcast-id's from wp-gidsinfo
+tib_bcid <- ns_weken |> 
+  left_join(tib_gidsinfo, by = join_by(cz_slot_value == `key-modelrooster`)) |> 
+  filter(!is.na(woj_bcid)) |> 
+  select(woj_bcid, slot_ts = date_time, slot_key = cz_slot_value, slot_title_NL = `titel-NL`) |> 
+  arrange(woj_bcid, slot_ts)
+
+# find any updates to the nipper-studio list since its publication
 wp_conn <- get_wp_conn("dev")
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
 }
 
-# SQL uses zo=1, ma=2, etc. but R uses ma=1, di=2, etc. Prep a conversion list
-r2sql_wday <- c("zo", "ma", "di", "wo", "do", "vr", "za")
+qry <- "truncate table salsa_bcid_titles"
+qry_result <- dbExecute(wp_conn, qry)
+db_wrt_sts <- dbWriteTable(wp_conn, "salsa_bcid_titles", tib_bcid, row.names = F, overwrite = T)
 
-cz_week_sched.4a <- cz_week_sched.3 |> filter(!regular_rewind & delta < 99) |>  rowwise() |> 
-  mutate(rewind_ts_all = list(fetch_rewind_ts(tit_nl, slot_ts, parent))) |> unnest(rewind_ts_all) |> 
-  mutate(ts_rewind = ymd_hm(ts_rewind_irr)) |> select(-ts_rewind_irr)
+qry <- "select bt.*, replace(po1.post_title, '&amp;', '&') as title_wp
+from salsa_bcid_titles bt 
+left join wp_posts po1 on po1.post_date = bt.slot_ts
+left join wp_term_relationships tr1 ON tr1.object_id = po1.id                   
+left join wp_term_taxonomy tx1 ON tx1.term_taxonomy_id = tr1.term_taxonomy_id   
+where po1.post_type = 'programma' and tx1.term_taxonomy_id = 5 
+--  and bt.slot_title_NL != replace(po1.post_title, '&amp;', '&')
+;"
+wp_slot_check <- dbGetQuery(wp_conn, qry) |> mutate(title_wp = str_replace(title_wp, "&amp;", "&"))
 
 dbDisconnect(wp_conn)
 
-cz_week_sched.4b <- cz_week_sched.3 |> anti_join(cz_week_sched.4a, by = join_by(rec_id))
+# remember which replacements to remove
+tib_bcid_del <- wp_slot_check |> filter(str_to_lower(slot_title_NL) != str_to_lower(title_wp)) |> 
+  mutate(slot_ts = ymd_hms(slot_ts)) |>  select(slot_ts) |> arrange(slot_ts)
 
-cz_week_sched.5 <- bind_rows(cz_week_sched.4a, cz_week_sched.4b) |> arrange(rec_id)
+# only keep replacements in universe-shared
+tib_bcid_title <- tib_bcid |> select(slot_title_NL, woj_bcid, slot_key) |> distinct()
+
+wp_slot_check.1 <- wp_slot_check |> filter(str_to_lower(slot_title_NL) != str_to_lower(title_wp)) |> 
+  left_join(tib_bcid_title, by = join_by(title_wp == slot_title_NL), 
+            keep = T, relationship = "many-to-many") |> 
+  filter(!is.na(slot_title_NL.y))
+
+wp_slot_check_multiple <- wp_slot_check.1 |> group_by(title_wp) |> 
+  mutate(n = n()) |> filter(n == 1) |> ungroup()
+
+# make the replcaement
+tib_bdc_new <- wp_slot_check_multiple |> 
+  select(woj_bcid = woj_bcid.y, slot_ts, slot_key = slot_key.y, slot_title_NL = slot_title_NL.y) |> 
+  mutate(slot_ts = ymd_hms(slot_ts))
+
+# join the lot - this is the final version to get the replays from
+tib_bcid <- tib_bcid |> anti_join(tib_bcid_del, join_by(slot_ts)) |> bind_rows(tib_bdc_new) |> 
+  arrange(woj_bcid)
+
 
 #  + . check schedule length ----
 if (sum(cz_week_sched.5$minutes) != 10080) {
