@@ -244,3 +244,13 @@ get_cycle <- function(cz_week_start) {
   i_diff <- as.integer(cz_week_start - ref_date_B_cycle) %/% 7L
   if_else(i_diff %% 2 == 0, "B", "A")
 }
+
+get_wallclock <- function(pm_nonstop_start, pm_cum_time) {
+  as_datetime(pm_nonstop_start + dseconds(pm_cum_time)) |> round_date("minute") |> 
+    as.character() |> str_sub(12, 16)
+}
+
+sec2hms <- function(pm_duration_sec) {
+  hms1 <- paste0("00:00:", round(pm_duration_sec, 0)) |> hms(roll = TRUE)
+  sprintf("%02d:%02d:%02d", hms1@hour, hms1@minute, hms1@.Data)
+}

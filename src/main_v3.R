@@ -68,7 +68,7 @@ woj_gidsinfo <- tib_gidsinfo |>
 
 # create time series ----
 # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-cz_week_start <- ymd_hm("2024-03-28 13:00")
+cz_week_start <- ymd_hm("2024-04-04 13:00")
 cz_week_slots <- slot_sequence(cz_week_start)
 
 # combine with 'modelrooster' ----
@@ -106,7 +106,7 @@ where length(trim(po1.post_title)) > 0
 order by po1.post_date desc
 ;"
 
-fmt_slot_day <- stamp("zo19", orders = "%a%H")
+suppressMessages(fmt_slot_day <- stamp("zo19", orders = "%a%H"))
 universe_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(ymd_hms(wpdmp_slot_ts))) |> 
   # CZ-live Wereld only
   filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22")
@@ -124,28 +124,40 @@ if (sum(cz_week_sched.3$minutes) != 10080) {
 }
 
 # WoJ playlistweek ----
-pl_items <- cz_week_sched.3 |> 
+plw_items <- cz_week_sched.3 |> 
   filter(broadcast_type != "NonStop") |> 
-  select(slot_ts, broadcast_id, broadcast, broadcast_type, ts_rewind, audio_src, mac) |> 
+  select(slot_ts, broadcast_id, tit_nl, broadcast_type, ts_rewind, 
+         audio_src, mac, live_op_universe = live) |> 
+  mutate(live_op_universe = if_else(broadcast_type == "WorldOfJazz", "nvt", live_op_universe)) |>
   mutate(uitzending = format(slot_ts, "%Y-%m-%d_%a%Hu"),
-         titel = broadcast,
+         titel = tit_nl,
          universe_slot = format(ts_rewind, "%Y-%m-%d_%a%Hu"),
          bron = case_when(broadcast_type == "LaCie" ~ "zie Overzicht Herhaalprogramma's",
-                          broadcast_type == "WorldOfJazz" ~ "lokaal op WorldOfJazz-pc",
+                          broadcast_type == "WorldOfJazz" ~ "originele montage op WoJ-pc",
                           broadcast_type == "Universe" & 
-                            audio_src == "Universe" ~ paste0("volgt ",
-                                                             mac,
-                                                             " van deze week: ",
-                                                             format(ts_rewind, "%Y-%m-%d_%a%Hu")),
-                          broadcast_type == "Universe" &
-                            audio_src == "HiJack" ~ paste0("HiJack-file ",
-                                                           mac,
-                                                           ": ",
-                                                           format(ts_rewind, "%Y-%m-%d_%a%Hu")),
+                            audio_src == "Universe" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                                             ", originele montage op ",
+                                                             mac),
+                          broadcast_type == "Universe" & audio_src == "HiJack" &
+                            live_op_universe == "Y" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                                             ", HiJack op ",
+                                                             mac),
+                          broadcast_type == "Universe" & audio_src == "HiJack" &
+                            live_op_universe == "N" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                                             ", HiJack of originele montage op ",
+                                                             mac),
                           T ~ "todo")) |> 
   select(uitzending, titel, bron)
 
-export(pl_items, "C:/Users/nipper/Documents/BasieBeats/plw_test.tsv")
+# + upload to GD ----
+ss <- sheet_write(ss = "1OoQdHgpb6Yr3L7awSt2Ek5oz4TIegQq4YcFUALykB_E",
+                  sheet = "plw_items",
+                  data = plw_items)
+
+# + store local copy ----
+woj_playlists_fn <- paste0("WoJ_playlistweek_", format(cz_week_start, "%Y_%m_%d"), ".tsv")
+woj_playlists_qfn <- path_join(c("C:", "Users", "nipper", "Documents", "BasieBeats", woj_playlists_fn))
+write_tsv(plw_items, woj_playlists_qfn)
 
 # WoJ gidsweek ----
 # . + prep json ----
@@ -215,7 +227,7 @@ write_file(json_rep, cz_week_json_qfn, append = T)
 temp_json_file.1 <- read_file(cz_week_json_qfn)
 temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
 
-# WoJ gidsweek ----
+# . + store it ----
 final_json_qfn <- paste0("WoJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
 write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
            append = F)
