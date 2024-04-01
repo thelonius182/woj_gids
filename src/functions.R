@@ -32,48 +32,48 @@ get_wp_conn <- function(pm_db_type = "prd") {
   return(grh_conn)
 }
 
-get_rewind_ts_old <- function(pm_rec_id) {
-  
-  # set current rewind
-  cur_rew <- cz_week_irr_rew |> filter(rec_id == pm_rec_id)
-  
-  # set sql parameters
-  sq_title_NL <- cur_rew$tit_nl
-  sq_slot_ts <- cur_rew$slot_ts
-  sq_int_parent_day <- which(r2sql_wday == str_sub(cur_rew$parent, 1, 2))
-  sq_parent_hour <- parse_number(cur_rew$parent)
-
-  # prep query  
-  sql_stm <- qry_rewind_post |> 
-    str_replace("@title_NL", sq_title_NL) |> 
-    str_replace_all("@slot_ts", format(sq_slot_ts, "%Y-%m-%d %H:00")) |> 
-    str_replace("@int_parent_day", as.character(sq_int_parent_day)) |> 
-    str_replace("@parent_hour", as.character(sq_parent_hour)) |> 
-    str_replace_all('"', "")
-  
-  # excute
-  dbGetQuery(wp_conn, sql_stm)
-}
+# get_rewind_ts_depr <- function(pm_rec_id) {
+#   
+#   # set current rewind
+#   cur_rew <- cz_week_irr_rew |> filter(rec_id == pm_rec_id)
+#   
+#   # set sql parameters
+#   sq_title_NL <- cur_rew$tit_nl
+#   sq_slot_ts <- cur_rew$slot_ts
+#   sq_int_parent_day <- which(r2sql_wday == str_sub(cur_rew$parent, 1, 2))
+#   sq_parent_hour <- parse_number(cur_rew$parent)
+# 
+#   # prep query  
+#   sql_stm <- qry_rewind_post |> 
+#     str_replace("@title_NL", sq_title_NL) |> 
+#     str_replace_all("@slot_ts", format(sq_slot_ts, "%Y-%m-%d %H:00")) |> 
+#     str_replace("@int_parent_day", as.character(sq_int_parent_day)) |> 
+#     str_replace("@parent_hour", as.character(sq_parent_hour)) |> 
+#     str_replace_all('"', "")
+#   
+#   # excute
+#   dbGetQuery(wp_conn, sql_stm)
+# }
 
 # woj-slots that precede the universe one need another, earlier replay post.
 # The same goes for woj-slots that replay live universe slots 
-fetch_rewind_ts <- function(pm_tit_nl, pm_slot_ts, pm_parent) {
-  
-  # set sql parameters
-  sq_int_parent_day <- which(r2sql_wday == str_sub(pm_parent, 1, 2)) |> as.character()
-  sq_parent_hour <- parse_number(pm_parent) |> as.character()
-  pm_tit_nl <- if_else(pm_tit_nl == "¡Mambo!", "Mambo", pm_tit_nl)
-
-  # prep query  
-  sql_stm <- qry_rewind_post |> 
-    str_replace("@title_NL", pm_tit_nl) |> 
-    str_replace_all("@slot_ts", format(pm_slot_ts, "%Y-%m-%d %H:00")) |> 
-    str_replace("@int_parent_day", sq_int_parent_day) |> 
-    str_replace("@parent_hour", sq_parent_hour)
-  
-  # excute
-  dbGetQuery(wp_conn, sql_stm)
-}
+# fetch_rewind_ts_depr <- function(pm_tit_nl, pm_slot_ts, pm_parent) {
+#   
+#   # set sql parameters
+#   sq_int_parent_day <- which(r2sql_wday == str_sub(pm_parent, 1, 2)) |> as.character()
+#   sq_parent_hour <- parse_number(pm_parent) |> as.character()
+#   pm_tit_nl <- if_else(pm_tit_nl == "¡Mambo!", "Mambo", pm_tit_nl)
+# 
+#   # prep query  
+#   sql_stm <- qry_rewind_post |> 
+#     str_replace("@title_NL", pm_tit_nl) |> 
+#     str_replace_all("@slot_ts", format(pm_slot_ts, "%Y-%m-%d %H:00")) |> 
+#     str_replace("@int_parent_day", sq_int_parent_day) |> 
+#     str_replace("@parent_hour", sq_parent_hour)
+#   
+#   # excute
+#   dbGetQuery(wp_conn, sql_stm)
+# }
 
 # compare two slot-id's
 slot_delta <- function(slot_label_a, slot_label_b, pm_live) {
@@ -146,4 +146,101 @@ get_mal_conn <- function() {
   )
   
   return(result)
+}
+
+get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_type, pm_live) {
+  
+  # Universe-slots only
+  if (pm_broadcast_type != "Universe") return(list(ts_rewind = NA_Date_, audio_src = NA_character_))
+  
+  # this week's Universe live broadcasts need a HiJack-file (previous week)
+  if (pm_live == "Y") {
+    ymd_upper_limit <- pm_week_start
+  } else {
+    ymd_upper_limit <- pm_slot_ts
+  }
+  
+  # get the rewind of this broadcast closest to its slot
+  cur_ts_rewind <- universe_rewinds |> 
+    filter(wpdmp_slot_title == pm_tit_nl & wpdmp_slot_ts < ymd_upper_limit) |> 
+    arrange(desc(wpdmp_slot_ts)) |> head(1) |> select(value = wpdmp_slot_ts)
+  
+  if (cur_ts_rewind$value < pm_week_start) {
+    cur_audio_src <- "HiJack"
+  } else {
+    cur_audio_src <- "Universe"
+  }
+  
+  return(list(ts_rewind = ymd_hms(cur_ts_rewind$value), audio_src = cur_audio_src))
+}
+
+# prep_week <- function(week_nr) {
+#   week_x_init <- tib_uni_moro %>%
+#     select(cz_slot = slot, contains(week_nr))
+#   
+#   # pivot-long to collapse week attributes into NV-pairs 
+#   week_x_long <-
+#     gather(
+#       data = week_x_init,
+#       key = slot_key,
+#       value = slot_value, -cz_slot,
+#       na.rm = T
+#     ) %>%
+#     mutate(
+#       slot_key = case_when(
+#         slot_key == paste0("week_", week_nr) ~ "titel",
+#         slot_key == paste0("bijzonderheden_week_", week_nr) ~ "cmt mt-rooster",
+#         slot_key == paste0("product_week_", week_nr) ~ "product",
+#         T ~ slot_key
+#       ),
+#       slot_key = factor(slot_key, ordered = T, levels = cz_slot_key_levels),
+#       cz_slot_day = str_sub(cz_slot, 1, 2),
+#       cz_slot_day = factor(cz_slot_day, ordered = T, levels = weekday_levels),
+#       cz_slot_hour = str_sub(cz_slot, 3, 4),
+#       cz_slot_size = str_sub(cz_slot, 5),
+#       ord_day = as.integer(week_nr)
+#     ) %>%
+#     select(
+#       cz_slot_day,
+#       ord_day,
+#       cz_slot_hour,
+#       cz_slot_key = slot_key,
+#       cz_slot_value = slot_value,
+#       cz_slot_size
+#     ) %>%
+#     arrange(cz_slot_day, cz_slot_hour, cz_slot_key)
+#   
+#   # promote slot-size to be an attribute too 
+#   week_temp <- week_x_long %>%
+#     select(-cz_slot_key, -cz_slot_value) %>%
+#     mutate(
+#       cz_slot_key = "size",
+#       cz_slot_key = factor(x = cz_slot_key,
+#                            ordered = T,
+#                            levels = cz_slot_key_levels),
+#       cz_slot_value = cz_slot_size
+#     ) %>%
+#     select(cz_slot_day,
+#            ord_day,
+#            cz_slot_hour,
+#            cz_slot_key,
+#            cz_slot_value,
+#            cz_slot_size) %>%
+#     distinct
+#   
+#   # final result week-x 
+#   week_x <- bind_rows(week_x_long, week_temp) %>%
+#     select(-cz_slot_size) %>%
+#     arrange(cz_slot_day, ord_day, cz_slot_hour, cz_slot_key)
+#   
+#   rm(week_x_init, week_x_long, week_temp)
+#   
+#   return(week_x)
+# }
+
+get_cycle <- function(cz_week_start) {
+  
+  ref_date_B_cycle <- ymd("2019-10-17")
+  i_diff <- as.integer(cz_week_start - ref_date_B_cycle) %/% 7L
+  if_else(i_diff %% 2 == 0, "B", "A")
 }
