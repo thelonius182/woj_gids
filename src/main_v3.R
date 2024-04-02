@@ -1,18 +1,35 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Create a WoJ "schedule week" (WP-gids)
+# Create a WoJ "schedule week" & "playlist week"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # the packages to use ----
 pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs,
-               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite)
+               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
 
-source("src/functions.R", encoding = "UTF-8")
 config <- read_yaml("config.yaml")
-qry_rewind_post <- read_file("src/sql_stmt_prv_post_v3.txt")
+source("src/functions.R", encoding = "UTF-8")
+
+qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
+lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
+flog.info("= = = = = START - WoJ Schedules, version 2024-04-02 20:50 = = = = =", name = "wojsch")
 
 # say "Hi" to Google
-drive_auth(email = "cz.teamservice@gmail.com")
-gs4_auth(token = drive_token())
+hi_google <- tryCatch(
+  {
+    drive_auth(email = "cz.teamservice@gmail.com")
+    gs4_auth(token = drive_token())
+    "hi_google_ok"
+  },
+  error = function(cond) {
+    msg <- sprintf("Failed to connect to GD: %s", cond)
+    flog.error(msg, name = "wojsch")
+    return("hi_google_not_ok")
+  }
+)
+
+if (hi_google != "hi_google_ok") {
+  stop("ended abmormally")
+}
 
 # init sheet identifiers
 gs_home <- "https://docs.google.com/spreadsheets/d/"
@@ -22,7 +39,23 @@ download_home <- "C:/Users/nipper/Downloads/cz_downloads/"
 # NB - for some reason, GD gives an error when using 'read_sheet'. So, use 'drive_download' instead.
 moro <- "1LdBjK5hcpl8m1ZdcZujWWcsx7nLJPY8Gt69mjN8QS9A"
 gs_path <- paste0(download_home, "tib_moro.tsv")
-drive_download(paste0(gs_home, moro), path = gs_path, overwrite = T)
+
+get_moro <- tryCatch(
+  {
+    drive_download(paste0(gs_home, moro), path = gs_path, overwrite = T)
+    "get_moro_ok"
+  },
+  error = function(cond) {
+    msg <- sprintf("Failed to download WoJ modelrooster: %s", cond)
+    flog.error(msg, name = "wojsch")
+    return("get_moro_not_ok")
+  }
+)
+
+if (get_moro != "get_moro_ok") {
+  stop("ended abmormally")
+}
+
 tib_moro <- read_tsv(file = gs_path, locale = locale(encoding = "UTF-8"), col_types = "iiciiiciccccc") 
 
 #  + . check modelrooster length ----

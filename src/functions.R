@@ -1,6 +1,9 @@
 
 get_wp_conn <- function(pm_db_type = "prd") {
   
+  # sqlstmt <- "show variables like 'character_set_client'"
+  # result <- dbGetQuery(conn = wp_conn, statement = sqlstmt)
+  
   if (pm_db_type == "prd") {
     db_host <- key_get(service = paste0("sql-wp", pm_db_type, "_host"))
     db_user <- key_get(service = paste0("sql-wp", pm_db_type, "_user"))

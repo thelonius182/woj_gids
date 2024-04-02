@@ -35,12 +35,20 @@ wp_playlists.2 <- wp_playlists.1 |> inner_join(ml_playlists, by = join_by(slot_t
 
 wp_playlists.3 <- wp_playlists.2 |> filter(plid == 1)
 
+wp_conn <- get_wp_conn("dev")
+
+if (typeof(wp_conn) != "S4") {
+  stop("db-connection failed")
+}
+
 # prep de gids ----
 for (cur_pl_label in wp_playlists.3$pl_label) {
   
-  cur_pl <- wp_playlists.2 |> filter(pl_label == cur_pl_label) |> 
+  cur_pl.1 <- wp_playlists.2 |> filter(pl_label == cur_pl_label)
+  min_slot_ts <- min(cur_pl.1$slot_ts)
+  cur_pl <- cur_pl.1 |> 
     mutate(cum_time = round(cumsum(duration), 0),
-           wall_clock = get_wallclock(slot_ts, cum_time)) |> 
+           wall_clock = get_wallclock(min_slot_ts, cum_time)) |> 
     filter(cum_time < 60 * minutes)
   
   sql_post_date <- cur_pl$slot_ts[[1]] |> as.character()
@@ -53,11 +61,13 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
   sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
   
   for (q1 in 1:nrow(cur_pl)) {
+        # '<tr>\n<td>[track tijd="%s" text="%s %s"]\n<span>',
     regel <-
       sprintf(
-        '<tr>\n<td>[track tijd="%s" text="%s %s"]\n<span>',
-        sec2hms(cur_pl$cum_time[q1]),
+        '<tr>\n<td>%s %s - %s\n<span>',
+        # sec2hms(cur_pl$cum_time[q1]),
         cur_pl$wall_clock[q1],
+        cur_pl$artist[q1],
         cur_pl$track_title[q1] |> 
           str_replace_all(pattern = '"',  "'") %>% 
           str_replace_all(pattern = "\\x5B", replacement = "(") %>% 
@@ -65,10 +75,10 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
       )
     sql_gidstekst <- paste0(sql_gidstekst, regel)
     
-    regel <- cur_pl$artist[q1]
-    sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
+    # regel <- cur_pl$artist[q1]
+    # sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
     
-    regel <- sprintf('%s</span></td>\n</tr>',
+    regel <- sprintf('Album %s</span></td>\n</tr>',
                      cur_pl$album_title[q1])
     sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
   }
@@ -78,7 +88,7 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
     '</tbody>\n</table>
 &nbsp;
 <a href="https://www.muziekweb.nl">
-<img class="aligncenter" src="https://www.concertzender.nl/wp-content/uploads/2023/06/dank_muw_logo.png" />
+<img class="aligncenter" src="https://wpdev3.concertzender.nl/wp-content/uploads/2024/04/muw_bengu_logo_small.png" />
 </a>
 &nbsp;
 &nbsp;'
@@ -104,14 +114,17 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
     }
     
     upd_stmt02 <- sprintf(
-      "update wp_posts set post_content = '%s' where id = %s;",
+      "update wp_posts set post_content = convert(cast(convert('%s' using latin1) as binary) using utf8mb4) 
+      where id = %i;",
       str_replace_all(sql_gidstekst1, "'", "&apos;"),
-      as.character(dsSql01$id[u1])
+      dsSql01$id[u1]
     )
     
-    dbExecute(wp_conn, upd_stmt02)
+    upd_result <- dbExecute(wp_conn, upd_stmt02)
   }
   
   flog.info("Gids bijgewerkt: %s", cur_pl, name = "nsbe_log")
   
 }
+
+dbDisconnect(wp_conn)
