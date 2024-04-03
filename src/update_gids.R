@@ -57,18 +57,18 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
   
   sql_gidstekst <- "@HEADER\n<!--more-->\n\n"
 
-  regel <- '<style>td {padding: 6px; text-align: left;}</style>\n<table style="width: 100%;"><tbody>'
+  regel <- '<style>td {padding: 6px; text-align: left;} .album-span {color: #999999;}</style>\n<table style="width: 100%;"><tbody>'
   sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
   
   for (q1 in 1:nrow(cur_pl)) {
-        # '<tr>\n<td>[track tijd="%s" text="%s %s"]\n<span>',
+    
     regel <-
       sprintf(
-        '<tr>\n<td>%s %s - %s\n<span>',
+        '<tr>\n<td>%s <strong>%s</strong> - %s\n<span  class="album-span">',
         # sec2hms(cur_pl$cum_time[q1]),
         cur_pl$wall_clock[q1],
-        cur_pl$artist[q1],
-        cur_pl$track_title[q1] |> 
+        cur_pl$track_title[q1], 
+        cur_pl$artist[q1] |> 
           str_replace_all(pattern = '"',  "'") %>% 
           str_replace_all(pattern = "\\x5B", replacement = "(") %>% 
           str_replace_all(pattern = "\\x5D", replacement = ")") 
@@ -78,7 +78,7 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
     # regel <- cur_pl$artist[q1]
     # sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
     
-    regel <- sprintf('Album %s</span></td>\n</tr>',
+    regel <- sprintf('Album: %s</span></td>\n</tr>',
                      cur_pl$album_title[q1])
     sql_gidstekst <- paste0(sql_gidstekst, regel, "\n")
   }

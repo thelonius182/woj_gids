@@ -71,9 +71,24 @@ if (nrow(tib_moro_dups) > 0) {
 }
 
 # load gidsinfo ----
-gidsinfo <- "16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA"
-tib_gidsinfo <- read_sheet(paste0(gs_home, gidsinfo), sheet = "gids-info")
-tib_gidsvertalingen <- read_sheet(paste0(gs_home, gidsinfo), sheet = "vertalingen NL-EN")
+get_gids <- tryCatch(
+  {
+    gidsinfo <- "16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA"
+    tib_gidsinfo <- read_sheet(paste0(gs_home, gidsinfo), sheet = "gids-info")
+    tib_gidsvertalingen <- read_sheet(paste0(gs_home, gidsinfo), sheet = "vertalingen NL-EN")
+    "get_gids_ok"
+  },
+  error = function(cond) {
+    msg <- sprintf("Failed to get gidsinfo/vertalingen: %s", cond)
+    flog.error(msg, name = "wojsch")
+    return("get_gids_not_ok")
+  }
+)
+
+if (get_gids != "get_gids_ok") {
+  stop("ended abmormally")
+}
+
 
 # + .any missing? ----
 # make sure all broadcasts have program details
