@@ -88,7 +88,7 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
     '</tbody>\n</table>
 &nbsp;
 <a href="https://www.muziekweb.nl">
-<img class="aligncenter" src="https://wpdev3.concertzender.nl/wp-content/uploads/2024/04/muw_bengu_logo_small.png" />
+<img class="aligncenter" src="https://www.concertzender.nl/wp-content/uploads/2024/04/muw_bengu_logo_small.png" />
 </a>
 &nbsp;
 &nbsp;'

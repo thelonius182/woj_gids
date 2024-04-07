@@ -116,7 +116,7 @@ woj_gidsinfo <- tib_gidsinfo |>
 
 # create time series ----
 # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-cz_week_start <- ymd_hm("2024-04-04 13:00")
+cz_week_start <- ymd_hm("2024-04-11 13:00")
 cz_week_slots <- slot_sequence(cz_week_start)
 
 # combine with 'modelrooster' ----
@@ -136,7 +136,8 @@ if (sum(cz_week_sched.2$minutes) != 10080) {
 }
 
 # prepare rewinds ----
-wp_conn <- get_wp_conn("dev")
+# wp_conn <- get_wp_conn("dev")
+wp_conn <- get_wp_conn()
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
@@ -159,7 +160,7 @@ universe_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(y
   # CZ-live Wereld only
   filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22")
 
-dbDisconnect(wp_conn)
+discon_result <- dbDisconnect(wp_conn)
 
 # add rewinds to the schedule
 cz_week_sched.3 <- cz_week_sched.2 |> rowwise() |> 

@@ -257,3 +257,22 @@ sec2hms <- function(pm_duration_sec) {
   hms1 <- paste0("00:00:", round(pm_duration_sec, 0)) |> hms(roll = TRUE)
   sprintf("%02d:%02d:%02d", hms1@hour, hms1@minute, hms1@.Data)
 }
+
+get_czweek_start <- function(arg_ts = now(tz = "Europe/Amsterdam")) {
+  
+  # adjust ts when running this on a Thursday after 13:00
+  if (wday(arg_ts, week_start = 1, label = T) == "do" && hour(arg_ts) >= 13) {
+    arg_ts <- arg_ts + days(1)
+  }
+  
+  # get first Thursday 13:00 after arg_ts
+  hour(arg_ts) <- 0
+  minute(arg_ts) <- 0
+  second(arg_ts) <- 0
+  while (wday(arg_ts, week_start = 1, label = T) != "do") {
+    arg_ts <- arg_ts + days(1)
+  }
+  
+  tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m0-%d %H:%M:%S", quiet = T)
+  tmp_format(arg_ts + hours(13))
+}
