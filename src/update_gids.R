@@ -123,8 +123,8 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
     upd_result <- dbExecute(wp_conn, upd_stmt02)
   }
   
-  flog.info("Gids bijgewerkt: %s", cur_pl, name = "nsbe_log")
+  # flog.info("Gids bijgewerkt: %s", cur_pl, name = "nsbe_log")
   
 }
 
-dbDisconnect(wp_conn)
+discon_result <- dbDisconnect(wp_conn)

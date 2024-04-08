@@ -116,7 +116,7 @@ woj_gidsinfo <- tib_gidsinfo |>
 
 # create time series ----
 # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-cz_week_start <- ymd_hm("2024-04-11 13:00")
+cz_week_start <- ymd_hm("2024-04-04 13:00")
 cz_week_slots <- slot_sequence(cz_week_start)
 
 # combine with 'modelrooster' ----
@@ -136,8 +136,8 @@ if (sum(cz_week_sched.2$minutes) != 10080) {
 }
 
 # prepare rewinds ----
-# wp_conn <- get_wp_conn("dev")
-wp_conn <- get_wp_conn()
+wp_conn <- get_wp_conn("dev")
+# wp_conn <- get_wp_conn()
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
