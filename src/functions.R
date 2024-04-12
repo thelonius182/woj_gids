@@ -276,3 +276,13 @@ get_czweek_start <- function(arg_ts = now(tz = "Europe/Amsterdam")) {
   tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m0-%d %H:%M:%S", quiet = T)
   tmp_format(arg_ts + hours(13))
 }
+
+woj_pick <- function(pm_ids) {
+  
+  if (is.null(pm_ids[[1]])) { 
+    0
+  } else {
+    fi_ids <- unlist(str_split(pm_ids, "[ ,]"))
+    as.integer(sample(fi_ids, 1))
+  }
+}

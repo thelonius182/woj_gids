@@ -100,10 +100,11 @@ if (nrow(bcs_without_gi) > 0) {
 }
 
 # get woj gidsinfo
-woj_gidsinfo <- tib_gidsinfo |> 
+woj_gidsinfo.1 <- tib_gidsinfo |> 
   select(woj_bcid, tit_nl = `titel-NL`, tit_en = `titel-EN`, prod_taak_nl = `productie-1-taak`, 
          prod_mdw = `productie-1-mdw`, genre_1_nl = `genre-1-NL`, genre_2_nl = `genre-2-NL`,
-         txt_nl = `std.samenvatting-NL`, txt_en = `std.samenvatting-EN`) |> arrange(woj_bcid) |> 
+         txt_nl = `std.samenvatting-NL`, txt_en = `std.samenvatting-EN`, feat_img_ids) |> 
+  arrange(woj_bcid) |> 
   left_join(tib_gidsvertalingen, by = c("prod_taak_nl" = "item-NL")) |> 
   rename(prod_taak_en = `item-EN`) |> 
   left_join(tib_gidsvertalingen, by = c("genre_1_nl" = "item-NL")) |> 
@@ -111,12 +112,19 @@ woj_gidsinfo <- tib_gidsinfo |>
   left_join(tib_gidsvertalingen, by = c("genre_2_nl" = "item-NL")) |> 
   rename(genre_2_en = `item-EN`) |> 
   select(woj_bcid, tit_nl, tit_en, prod_taak_nl, prod_taak_en, prod_mdw, 
-         genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en) |> 
-  mutate(woj_bcid = as.integer(woj_bcid))
+         genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en, feat_img_ids) |> 
+  mutate(woj_bcid = as.integer(woj_bcid)
+         # feat_img_ids = if_else(is.null(feat_img_ids), list("0"), feat_img_ids)
+         )
+
+# randomly choose one of the featured images
+woj_gidsinfo <- woj_gidsinfo.1 |> rowwise() |> 
+  mutate(feat_img_id = woj_pick(feat_img_ids)) |> select(-feat_img_ids) |> ungroup()
 
 # create time series ----
 # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-cz_week_start <- ymd_hm("2024-04-04 13:00")
+# cz_week_start <- ymd_hm("2024-04-04 13:00")
+cz_week_start <- get_czweek_start() |> ymd_hms(quiet = T)
 cz_week_slots <- slot_sequence(cz_week_start)
 
 # combine with 'modelrooster' ----
@@ -136,7 +144,7 @@ if (sum(cz_week_sched.2$minutes) != 10080) {
 }
 
 # prepare rewinds ----
-wp_conn <- get_wp_conn("dev")
+wp_conn <- get_wp_conn()
 # wp_conn <- get_wp_conn()
 
 if (typeof(wp_conn) != "S4") {
@@ -158,14 +166,16 @@ order by po1.post_date desc
 suppressMessages(fmt_slot_day <- stamp("zo19", orders = "%a%H"))
 universe_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(ymd_hms(wpdmp_slot_ts))) |> 
   # CZ-live Wereld only
-  filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22")
+  filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22") |> 
+  mutate(wpdmp_slot_title = str_to_lower(wpdmp_slot_title))
 
 discon_result <- dbDisconnect(wp_conn)
 
 # add rewinds to the schedule
 cz_week_sched.3 <- cz_week_sched.2 |> rowwise() |> 
-  mutate(ts_rewind = list(get_ts_rewind(cz_week_start, slot_ts, tit_nl, broadcast_type, live))) |> 
-  unnest_wider(ts_rewind) |> select(slot_ts, minutes, ts_rewind, audio_src, everything())
+  mutate(ts_rewind = list(get_ts_rewind(cz_week_start, slot_ts, str_to_lower(tit_nl), 
+                                        broadcast_type, live))) |> 
+  unnest_wider(ts_rewind) |> select(slot_ts, minutes, ts_rewind, audio_src, everything()) |> ungroup()
 
 #  + . check schedule length ----
 if (sum(cz_week_sched.3$minutes) != 10080) {
@@ -212,32 +222,35 @@ write_tsv(plw_items, woj_playlists_qfn)
 # . + prep json ----
 # . + originals with 1 genre ----
 tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
-  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, -genre_2_nl, -genre_2_en) |> 
+  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id, 
+         -genre_2_nl, -genre_2_en) |> 
   mutate(obj_name = fmt_utc_ts(obj_name), 
          stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
          start = format(start, "%Y-%m-%d %H:%M"),
          `post-type` = "programma_woj") |> 
-  select(obj_name, `post-type`, start, stop, everything(), -minutes) |> 
+  select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
   rename(`titel-nl` = tit_nl,
          `titel-en` = tit_en,
          `genre-1-nl` = genre_1_nl,
          `genre-1-en` = genre_1_en,
          `std.samenvatting-nl` = txt_nl,
          `std.samenvatting-en` = txt_en,
+         `featured-image` = feat_img_id,
          `productie-1-taak-nl` = prod_taak_nl,
          `productie-1-taak-en` = prod_taak_en,
          `productie-1-mdw` = prod_mdw)
 
-json_ori_gen1 <- woj2json(tib_json_ori_gen1)
+json_ori_gen1 <- woj2json(tib_json_ori_gen1) |> 
+  str_replace_all(pattern = '    "featured-image": 0,\\n', '')
 
 # . + originals with 2 genres ----
 tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
-  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en) |> 
+  select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
   mutate(obj_name = fmt_utc_ts(obj_name), 
          stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
          start = format(start, "%Y-%m-%d %H:%M"),
          `post-type` = "programma_woj") |> 
-  select(obj_name, `post-type`, start, stop, everything(), -minutes) |> 
+  select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
   rename(`titel-nl` = tit_nl,
          `titel-en` = tit_en,
          `genre-1-nl` = genre_1_nl,
@@ -246,11 +259,14 @@ tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2
          `genre-2-en` = genre_2_en,
          `std.samenvatting-nl` = txt_nl,
          `std.samenvatting-en` = txt_en,
+         `featured-image` = feat_img_id,
          `productie-1-taak-nl` = prod_taak_nl,
          `productie-1-taak-en` = prod_taak_en,
          `productie-1-mdw` = prod_mdw)
 
-json_ori_gen2 <- woj2json(tib_json_ori_gen2)
+json_ori_gen2 <- woj2json(tib_json_ori_gen2) |> 
+  str_replace_all(pattern = '    "featured-image": 0,\\n', '')
+
 
 # . + replays ----
 tib_json_rep <- cz_week_sched.3 |> filter(!is.na(ts_rewind)) |> 
