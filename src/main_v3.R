@@ -163,7 +163,7 @@ where length(trim(po1.post_title)) > 0
 order by po1.post_date desc
 ;"
 
-suppressMessages(fmt_slot_day <- stamp("zo19", orders = "%a%H"))
+fmt_slot_day <- stamp("zo19", orders = "%a%H", quiet = T)
 universe_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(ymd_hms(wpdmp_slot_ts))) |> 
   # CZ-live Wereld only
   filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22") |> 
@@ -293,6 +293,6 @@ temp_json_file.1 <- read_file(cz_week_json_qfn)
 temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
 
 # . + store it ----
-final_json_qfn <- paste0("WoJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
+final_json_qfn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
 write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
            append = F)

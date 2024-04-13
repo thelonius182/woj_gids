@@ -260,7 +260,7 @@ sec2hms <- function(pm_duration_sec) {
 
 get_czweek_start <- function(arg_ts = now(tz = "Europe/Amsterdam")) {
   
-  # adjust ts when running this on a Thursday after 13:00
+  # when running this on a Thursday between 13:00 and midnight, make it a Friday to force "next week"
   if (wday(arg_ts, week_start = 1, label = T) == "do" && hour(arg_ts) >= 13) {
     arg_ts <- arg_ts + days(1)
   }
