@@ -70,12 +70,15 @@ if (nrow(tib_moro_dups) > 0) {
   stop("WoJ modelrooster has duplicate rec_id's")
 }
 
-# load gidsinfo ----
+# load gidsinfo & Lacie-slots ----
 get_gids <- tryCatch(
   {
     gidsinfo <- "16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA"
     tib_gidsinfo <- read_sheet(paste0(gs_home, gidsinfo), sheet = "gids-info")
     tib_gidsvertalingen <- read_sheet(paste0(gs_home, gidsinfo), sheet = "vertalingen NL-EN")
+    lacie_slots <- "1d8t8ZItwfBpdVrB9lyc83-F8NysdHRDpgnw-TJ9G2ng"
+    tib_lacie_slots <- read_sheet(paste0(gs_home, lacie_slots), sheet = "woj_herhalingen_3.0") |> 
+      mutate(key_ts = as.integer(bc_woj_ymd))
     "get_gids_ok"
   },
   error = function(cond) {
@@ -143,9 +146,8 @@ if (sum(cz_week_sched.2$minutes) != 10080) {
   stop("CZ-week + gidsinfo length is wrong; should be 10.080 minutes")
 }
 
-# prepare rewinds ----
+# prepare Universe rewinds ----
 wp_conn <- get_wp_conn()
-# wp_conn <- get_wp_conn()
 
 if (typeof(wp_conn) != "S4") {
   stop("db-connection failed")
@@ -172,10 +174,22 @@ universe_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(y
 discon_result <- dbDisconnect(wp_conn)
 
 # add rewinds to the schedule
-cz_week_sched.3 <- cz_week_sched.2 |> rowwise() |> 
+cz_week_sched.3a <- cz_week_sched.2 |> rowwise() |> 
   mutate(ts_rewind = list(get_ts_rewind(cz_week_start, slot_ts, str_to_lower(tit_nl), 
                                         broadcast_type, live))) |> 
-  unnest_wider(ts_rewind) |> select(slot_ts, minutes, ts_rewind, audio_src, everything()) |> ungroup()
+  unnest_wider(ts_rewind) |> select(slot_ts, minutes, ts_rewind, audio_src, everything()) |> ungroup() |> 
+  mutate(key_ts = as.integer(slot_ts))
+
+# join lacie-slots
+cz_week_sched.3 <- cz_week_sched.3a |> left_join(tib_lacie_slots, join_by(key_ts)) |> 
+  mutate(bc_audio_new = if_else(!is.na(bc_audio_new),
+                                bc_audio_new,
+                                str_replace(bc_review, "keep |remove ", "")),
+         bc_orig_ymd_new = round_date(bc_orig_ymd_new, "hour"),
+         ts_rewind = if_else(is.na(ts_rewind) & !is.na(bc_orig_ymd_new),
+                             bc_orig_ymd_new,
+                             ts_rewind)) |> 
+  select(-c(key_ts:bc_review), -bc_orig_id_new)
 
 #  + . check schedule length ----
 if (sum(cz_week_sched.3$minutes) != 10080) {
@@ -186,27 +200,28 @@ if (sum(cz_week_sched.3$minutes) != 10080) {
 plw_items <- cz_week_sched.3 |> 
   filter(broadcast_type != "NonStop") |> 
   select(slot_ts, broadcast_id, tit_nl, broadcast_type, ts_rewind, 
-         audio_src, mac, live_op_universe = live) |> 
+         audio_src, mac, live_op_universe = live, bc_audio_new) |> 
   mutate(live_op_universe = if_else(broadcast_type == "WorldOfJazz", "nvt", live_op_universe)) |>
   mutate(uitzending = format(slot_ts, "%Y-%m-%d_%a%Hu"),
          titel = tit_nl,
          universe_slot = format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-         bron = case_when(broadcast_type == "LaCie" ~ "zie Overzicht Herhaalprogramma's",
+         bron = case_when(broadcast_type == "LaCie" ~ 
+                            paste0("hernoemde herhaling op WoJ-pc: ", bc_audio_new),
                           broadcast_type == "WorldOfJazz" ~ "originele montage op WoJ-pc",
-                          broadcast_type == "Universe" & 
-                            audio_src == "Universe" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                                             ", originele montage op ",
-                                                             mac),
-                          broadcast_type == "Universe" & audio_src == "HiJack" &
-                            live_op_universe == "Y" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                                             ", HiJack op ",
-                                                             mac),
-                          broadcast_type == "Universe" & audio_src == "HiJack" &
-                            live_op_universe == "N" ~ paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                                             ", HiJack of originele montage op ",
-                                                             mac),
-                          T ~ "todo")) |> 
-  select(uitzending, titel, bron)
+                          broadcast_type == "Universe" & audio_src == "Universe" ~ 
+                            paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                   ", originele montage op ",
+                                   mac),
+                          broadcast_type == "Universe" & audio_src == "HiJack" & live_op_universe == "Y" ~ 
+                            paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                   ", HiJack op ",
+                                   mac),
+                          broadcast_type == "Universe" & audio_src == "HiJack" & live_op_universe == "N" ~ 
+                            paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                   ", HiJack of originele montage op ",
+                                   mac),
+                          T ~ "todo"),
+         gereed = F, bijzonderheden = " ") |> select(uitzending, titel, bron, gereed, bijzonderheden)
 
 # + upload to GD ----
 ss <- sheet_write(ss = "1OoQdHgpb6Yr3L7awSt2Ek5oz4TIegQq4YcFUALykB_E",
@@ -264,9 +279,10 @@ tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2
          `productie-1-taak-en` = prod_taak_en,
          `productie-1-mdw` = prod_mdw)
 
-json_ori_gen2 <- woj2json(tib_json_ori_gen2) |> 
-  str_replace_all(pattern = '    "featured-image": 0,\\n', '')
-
+if (nrow(tib_json_ori_gen2) > 0) {
+  json_ori_gen2 <- woj2json(tib_json_ori_gen2) |> 
+    str_replace_all(pattern = '    "featured-image": 0,\\n', '')
+}
 
 # . + replays ----
 tib_json_rep <- cz_week_sched.3 |> filter(!is.na(ts_rewind)) |> 
@@ -285,7 +301,11 @@ json_rep <- woj2json(tib_json_rep)
 cz_week_json_qfn <- file_temp(pattern = "cz_week_json", ext = "json")
 file_create(cz_week_json_qfn)
 write_file(json_ori_gen1, cz_week_json_qfn, append = F)
-write_file(json_ori_gen2, cz_week_json_qfn, append = T)
+
+if (nrow(tib_json_ori_gen2) > 0) {
+  write_file(json_ori_gen2, cz_week_json_qfn, append = T)
+}
+
 write_file(json_rep, cz_week_json_qfn, append = T)
 
 # the file still has 3 intact json-objects. Remove the inner boundaries to make it a single object
