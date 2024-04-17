@@ -31,9 +31,9 @@ hour(cur_week_start) <- 0
 cur_week_stop <- cur_week_start + days(8)
 tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m-%d %H:%M:%S", quiet = T)
 sq_cur_week_start = tmp_format(cur_week_start)
-sq_cur_week_start = "2024-04-11 00:00:00"
+sq_cur_week_start = "2024-04-18 00:00:00"
 sq_cur_week_stop = tmp_format(cur_week_stop)
-sq_cur_week_stop = "2024-04-19 00:00:00"
+sq_cur_week_stop = "2024-04-26 00:00:00"
 
 # get mAirList playlist tracks
 qry <- sprintf("
@@ -64,7 +64,7 @@ ml_tracks_w_album <- ml_tracks.1 |> filter(attr_name == "album")
 
 track_keys_w_album <- ml_tracks_w_album |>select(slot, pos) |> distinct()
 
-ml_tracks_wo_album <- ml_playlists.1 |> anti_join(track_keys_w_album, join_by(slot, pos)) |> 
+ml_tracks_wo_album <- ml_tracks.1 |> anti_join(track_keys_w_album, join_by(slot, pos)) |> 
   group_by(slot, pos) |> mutate(grp = row_number()) |> ungroup() |> filter(grp == 1) |> 
   mutate(album_title = "-") |> select(-grp)
 
