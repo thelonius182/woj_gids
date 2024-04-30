@@ -13,27 +13,18 @@ if (typeof(mal_conn) != "S4") {
 }
 
 # get the week to build
-qry <- "
-select max(po1.post_date) as ymd_post
-from wp_posts po1
-    left join wp_postmeta pm1 on pm1.post_id = po1.id
-where po1.post_date > '2024-03-01' 
-  and DAYOFWEEK(po1.post_date) = 5 
-  and hour(po1.post_date) = 13 
-  and po1.post_type = 'programma'
-  and pm1.meta_key = 'pr_metadata_orig'
-  and pm1.meta_value = ''
-;"
-
-prv_week_start <- dbGetQuery(wp_conn, qry) |> ymd_hms(quiet = T) 
+qfns <- dir_ls(path = "C:/cz_salsa/gidsweek_uploaden/", 
+               type = "file",
+               regexp = "WJ_gidsweek_\\d{4}.*[.]json$") |> sort(decreasing = T)
+prv_week_start <- str_extract(qfns[1], pattern = "\\d{4}_\\d{2}_\\d{2}") |> ymd(quiet = T)
 cur_week_start <- prv_week_start + days(7)
 hour(cur_week_start) <- 0
 cur_week_stop <- cur_week_start + days(8)
 tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m-%d %H:%M:%S", quiet = T)
 sq_cur_week_start = tmp_format(cur_week_start)
-sq_cur_week_start = "2024-04-18 00:00:00"
+# sq_cur_week_start = "2024-04-25 00:00:00"
 sq_cur_week_stop = tmp_format(cur_week_stop)
-sq_cur_week_stop = "2024-04-26 00:00:00"
+# sq_cur_week_stop = "2024-05-03 00:00:00"
 
 # get mAirList playlist tracks
 qry <- sprintf("

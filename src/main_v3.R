@@ -23,7 +23,7 @@ hi_google <- tryCatch(
   error = function(cond) {
     msg <- sprintf("Failed to connect to GD: %s", cond)
     flog.error(msg, name = "wojsch")
-    return("hi_google_not_ok")
+    return("error")
   }
 )
 
@@ -48,7 +48,7 @@ get_moro <- tryCatch(
   error = function(cond) {
     msg <- sprintf("Failed to download WoJ modelrooster: %s", cond)
     flog.error(msg, name = "wojsch")
-    return("get_moro_not_ok")
+    return("error")
   }
 )
 
@@ -77,21 +77,20 @@ get_gids <- tryCatch(
     tib_gidsinfo <- read_sheet(paste0(gs_home, gidsinfo), sheet = "gids-info")
     tib_gidsvertalingen <- read_sheet(paste0(gs_home, gidsinfo), sheet = "vertalingen NL-EN")
     lacie_slots <- "1d8t8ZItwfBpdVrB9lyc83-F8NysdHRDpgnw-TJ9G2ng"
-    tib_lacie_slots <- read_sheet(paste0(gs_home, lacie_slots), sheet = "woj_herhalingen_3.0") |> 
+    tib_lacie_slots <- read_sheet(paste0(gs_home, lacie_slots), sheet = "woj_herhalingen_4.0") |> 
       mutate(key_ts = as.integer(bc_woj_ymd))
     "get_gids_ok"
   },
   error = function(cond) {
     msg <- sprintf("Failed to get gidsinfo/vertalingen: %s", cond)
     flog.error(msg, name = "wojsch")
-    return("get_gids_not_ok")
+    return("error")
   }
 )
 
 if (get_gids != "get_gids_ok") {
   stop("ended abmormally")
 }
-
 
 # + .any missing? ----
 # make sure all broadcasts have program details
@@ -182,14 +181,15 @@ cz_week_sched.3a <- cz_week_sched.2 |> rowwise() |>
 
 # join lacie-slots
 cz_week_sched.3 <- cz_week_sched.3a |> left_join(tib_lacie_slots, join_by(key_ts)) |> 
-  mutate(bc_audio_new = if_else(!is.na(bc_audio_new),
-                                bc_audio_new,
-                                str_replace(bc_review, "keep |remove ", "")),
-         bc_orig_ymd_new = round_date(bc_orig_ymd_new, "hour"),
-         ts_rewind = if_else(is.na(ts_rewind) & !is.na(bc_orig_ymd_new),
-                             bc_orig_ymd_new,
+  rename(audio_file = `audio file`) |> 
+  mutate(audio_file = if_else(!is.na(audio_file), 
+                              audio_file,
+                              str_replace(bc_review, "keep |remove ", "")),
+         replay = round_date(replay, "hour"),
+         ts_rewind = if_else(is.na(ts_rewind) & !is.na(replay),
+                             replay,
                              ts_rewind)) |> 
-  select(-c(key_ts:bc_review), -bc_orig_id_new)
+  select(-c(key_ts:bc_review), -bc_orig_id_new) 
 
 #  + . check schedule length ----
 if (sum(cz_week_sched.3$minutes) != 10080) {
@@ -200,13 +200,13 @@ if (sum(cz_week_sched.3$minutes) != 10080) {
 plw_items <- cz_week_sched.3 |> 
   filter(broadcast_type != "NonStop") |> 
   select(slot_ts, broadcast_id, tit_nl, broadcast_type, ts_rewind, 
-         audio_src, mac, live_op_universe = live, bc_audio_new) |> 
+         audio_src, mac, live_op_universe = live, audio_file) |> 
   mutate(live_op_universe = if_else(broadcast_type == "WorldOfJazz", "nvt", live_op_universe)) |>
   mutate(uitzending = format(slot_ts, "%Y-%m-%d_%a%Hu"),
          titel = tit_nl,
          universe_slot = format(ts_rewind, "%Y-%m-%d_%a%Hu"),
          bron = case_when(broadcast_type == "LaCie" ~ 
-                            paste0("hernoemde herhaling op WoJ-pc: ", bc_audio_new),
+                            paste0("hernoemde herhaling op WoJ-pc: ", audio_file),
                           broadcast_type == "WorldOfJazz" ~ "originele montage op WoJ-pc",
                           broadcast_type == "Universe" & audio_src == "Universe" ~ 
                             paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),

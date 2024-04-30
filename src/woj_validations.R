@@ -8,7 +8,7 @@ source("src/functions.R", encoding = "UTF-8")
 
 qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
 lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
-flog.info("= = = = = START - WoJ Validations, version 2024-04-07 16:18 = = = = =", name = "wojsch")
+flog.info("= = = = = START - WoJ Validations, version 2024-04-30 20:43 = = = = =", name = "wojsch")
 
 # connect to DB ----
 # wp_conn <- get_wp_conn("dev")
@@ -129,4 +129,4 @@ qry <- "update wp_postmeta pm1 join salsa_replacements rp1 on rp1.pgmID1 = pm1.p
 set pm1.meta_value = rp1.replaceID2 where pm1.meta_key = 'pr_metadata_orig'
 ;"
 valF.3 <- dbExecute(wp_conn, qry)
-flog.info("= = = = = STOP - WoJ Validations = = = = =", name = "wojsch")
+flog.info("= = = = = STOP  - WoJ Validations = = = = = = = = = = = = = = = = = =", name = "wojsch")
