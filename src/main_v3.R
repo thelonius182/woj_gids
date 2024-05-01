@@ -13,6 +13,9 @@ qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
 lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
 flog.info("= = = = = START - WoJ Schedules, version 2024-04-02 20:50 = = = = =", name = "wojsch")
 
+# run validations ----
+source("src/woj_validations.R", encoding = "UTF-8")
+
 # say "Hi" to Google
 hi_google <- tryCatch(
   {
@@ -196,6 +199,9 @@ if (sum(cz_week_sched.3$minutes) != 10080) {
   stop("CZ-week + replays length is wrong; should be 10.080 minutes")
 }
 
+# save it, so 'update_gids' can use it later
+write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
+
 # WoJ playlistweek ----
 plw_items <- cz_week_sched.3 |> 
   filter(broadcast_type != "NonStop") |> 
@@ -227,6 +233,8 @@ plw_items <- cz_week_sched.3 |>
 ss <- sheet_write(ss = "1OoQdHgpb6Yr3L7awSt2Ek5oz4TIegQq4YcFUALykB_E",
                   sheet = "plw_items",
                   data = plw_items)
+
+flog.info("WJ-playistweek has been replaced on GD", name = "wojsch")
 
 # + store local copy ----
 woj_playlists_fn <- paste0("WoJ_playlistweek_", format(cz_week_start, "%Y_%m_%d"), ".tsv")
@@ -316,3 +324,6 @@ temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
 final_json_qfn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
 write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
            append = F)
+
+flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")
+flog.info("= = = = =  FIN  = = = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")

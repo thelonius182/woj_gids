@@ -1,3 +1,18 @@
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
+# Insert non-stop ML-playlists into WP-pages
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
+
+# the packages to use ----
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs,
+               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
+
+config <- read_yaml("config.yaml")
+source("src/functions.R", encoding = "UTF-8")
+
+qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
+lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
+flog.info("= = = = = START - ML-playlists, version 2024-05-02.1 = = = = =", name = "wojsch")
+
 # coonect to wordpress-DB ----
 wp_conn <- get_wp_conn()
 
@@ -17,14 +32,14 @@ qfns <- dir_ls(path = "C:/cz_salsa/gidsweek_uploaden/",
                type = "file",
                regexp = "WJ_gidsweek_\\d{4}.*[.]json$") |> sort(decreasing = T)
 prv_week_start <- str_extract(qfns[1], pattern = "\\d{4}_\\d{2}_\\d{2}") |> ymd(quiet = T)
-cur_week_start <- prv_week_start + days(7)
+cur_week_start <- prv_week_start
+hour(cur_week_start) <- 13
+wj_weekslots <- slot_sequence(cur_week_start)
 hour(cur_week_start) <- 0
 cur_week_stop <- cur_week_start + days(8)
 tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m-%d %H:%M:%S", quiet = T)
 sq_cur_week_start = tmp_format(cur_week_start)
-# sq_cur_week_start = "2024-04-25 00:00:00"
 sq_cur_week_stop = tmp_format(cur_week_stop)
-# sq_cur_week_stop = "2024-05-03 00:00:00"
 
 # get mAirList playlist tracks
 qry <- sprintf("
@@ -63,10 +78,11 @@ ml_tracks.2 <- ml_tracks_w_album |> bind_rows(ml_tracks_wo_album) |> select(-att
   arrange(slot, pos)
 
 # get the WordPress playlists
-wp_playlists <- cz_week_sched.3 |> select(slot_ts, start, minutes, tit_nl, broadcast_type, txt_nl, txt_en)
+wj_gidsweek <- read_rds("C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
+wp_playlists <- wj_gidsweek |> select(slot_ts, start, minutes, tit_nl, broadcast_type, txt_nl, txt_en)
 
 # limit to NonStop
-wp_playlists.1 <- cz_week_slots |> select(slot_ts) |> left_join(wp_playlists, by = join_by(slot_ts)) |> 
+wp_playlists.1 <- wj_weekslots |> select(slot_ts) |> left_join(wp_playlists, by = join_by(slot_ts)) |> 
   fill(start, minutes, tit_nl, txt_nl, txt_en, broadcast_type, .direction = "down") |> 
   filter(broadcast_type == "NonStop")
 
@@ -165,3 +181,4 @@ for (cur_pl_label in wp_playlists.3$pl_label) {
 }
 
 discon_result <- dbDisconnect(wp_conn)
+flog.info("= = = = = STOP = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")
