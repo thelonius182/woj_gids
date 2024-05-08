@@ -199,7 +199,8 @@ if (sum(cz_week_sched.3$minutes) != 10080) {
   stop("CZ-week + replays length is wrong; should be 10.080 minutes")
 }
 
-# save it, so 'update_gids' can use it later
+# + . save it for update gids ----
+# so 'update_gids' can use it later
 write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
 
 # WoJ playlistweek ----

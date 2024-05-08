@@ -41,6 +41,9 @@ tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m-%d %H:%M:%S", quiet =
 sq_cur_week_start = tmp_format(cur_week_start)
 sq_cur_week_stop = tmp_format(cur_week_stop)
 
+flog.info(sprintf("current week start = %s", sq_cur_week_start), name = "wojsch")
+flog.info(sprintf("current week stop = %s", sq_cur_week_stop), name = "wojsch")
+
 # get mAirList playlist tracks
 qry <- sprintf("
 select pl.slot
