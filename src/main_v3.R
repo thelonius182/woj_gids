@@ -328,3 +328,5 @@ write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", 
 
 flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")
 flog.info("= = = = =  FIN  = = = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")
+
+# source("src/woj_publish_posts.R", encoding = "UTF-8")

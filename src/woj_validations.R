@@ -1,14 +1,4 @@
 
-# the packages to use ----
-# pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs,
-#                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
-# 
-# config <- read_yaml("config.yaml")
-# source("src/functions.R", encoding = "UTF-8")
-# 
-# qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
-# lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
-
 flog.info("running validations", name = "wojsch")
 
 # connect to DB ----
