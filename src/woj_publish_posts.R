@@ -3,7 +3,7 @@ flog.info("publishing...", name = "wojsch")
 
 # init ----
 # init flag variable: when sourcing this script fails, notify the caller by creating this variable.
-# So, make sure it doesn't exist when starting
+# So, make sure it doesn't exist at the start
 if (exists("salsa_source_error")) rm(salsa_source_error)
 
 # start main control loop
