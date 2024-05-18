@@ -286,3 +286,20 @@ woj_pick <- function(pm_ids) {
     as.integer(sample(fi_ids, 1))
   }
 }
+
+# convert a list to a query string with proper URL encoding
+list_to_query <- function(lst) {
+  params <- sapply(names(lst), function(key) {
+    
+    key_encoded = url_encode_param(key) 
+    value_encoded = url_encode_param(lst[[key]])
+    paste0(key_encoded, "=", value_encoded)
+  })
+  
+  paste(params, collapse = "&")
+}
+
+# Use URLencode with reserved = TRUE to ensure all special characters are encoded
+url_encode_param <- function(value) {
+  URLencode(as.character(value), reserved = TRUE)
+}

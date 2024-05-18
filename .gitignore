@@ -4,3 +4,6 @@
 .Ruserdata
 woj_gids.Rproj
 config.yaml
+.secret
+.secrets
+cz-studiomails.json

@@ -1,8 +1,13 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Create a WoJ "schedule week" & "playlist week"
+# Create WoJ's week schedules for WordPress and GD-spreadsheet
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
-flog.info("creating schedules", name = "wojsch")
+flog.info("creating WP-schedule", name = "wojsch")
+
+# init ----
+# init flag variable: when sourcing this script fails, notify the caller by creating this variable.
+# So, make sure it doesn't exist at the start
+if (exists("salsa_source_error")) rm(salsa_source_error)
 
 # enter main control loop
 repeat {
@@ -10,7 +15,7 @@ repeat {
   # say "Hi" to Google
   n_errors <- tryCatch(
     {
-      drive_auth(email = "cz.teamservice@gmail.com")
+      drive_auth(email = config$email_from)
       gs4_auth(token = drive_token())
       0L
     },
@@ -30,7 +35,7 @@ repeat {
   
   # load WoJ modelrooster ----
   # NB - for some reason, GD gives an error when using 'read_sheet'. So, use 'drive_download' instead.
-  moro <- "1LdBjK5hcpl8m1ZdcZujWWcsx7nLJPY8Gt69mjN8QS9A"
+  moro <- config$woj_modelrooster
   gs_path <- paste0(download_home, "tib_moro.tsv")
   
   n_errors <- tryCatch(
@@ -67,16 +72,15 @@ repeat {
   # load gidsinfo & Lacie-slots ----
   n_errors <- tryCatch(
     {
-      gidsinfo <- "16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA"
-      tib_gidsinfo <- read_sheet(paste0(gs_home, gidsinfo), sheet = "gids-info")
-      tib_gidsvertalingen <- read_sheet(paste0(gs_home, gidsinfo), sheet = "vertalingen NL-EN")
-      lacie_slots <- "1d8t8ZItwfBpdVrB9lyc83-F8NysdHRDpgnw-TJ9G2ng"
-      tib_lacie_slots <- read_sheet(paste0(gs_home, lacie_slots), sheet = "woj_herhalingen_4.0") |> 
+      tib_gidsinfo <- read_sheet(paste0(gs_home, config$gidsinfo), sheet = "gids-info")
+      tib_gidsvertalingen <- read_sheet(paste0(gs_home, config$gidsinfo), sheet = "vertalingen NL-EN")
+      tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.0") |> 
         mutate(key_ts = as.integer(bc_woj_ymd))
       0L
     },
     error = function(e1) {
-      flog.error(sprintf("Failed to get gidsinfo/vertalingen: %s", conditionMessage(e1)), name = "wojsch")
+      flog.error(sprintf("Failed to get gidsinfo/vertalingen/LaCie-slots: %s", conditionMessage(e1)), 
+                 name = "wojsch")
       return(1L)
     }
   )
@@ -198,7 +202,8 @@ repeat {
   # so 'update_gids' can use it later
   write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
   
-  # WoJ playlistweek ----
+  # WoJ Audio Allocation Sheet ----
+  flog.info("create audio allocation sheet", name = "wojsch")
   plw_items <- cz_week_sched.3 |> 
     filter(broadcast_type != "NonStop") |> 
     select(slot_ts, broadcast_id, tit_nl, broadcast_type, ts_rewind, 
@@ -226,7 +231,7 @@ repeat {
            gereed = F, bijzonderheden = " ") |> select(uitzending, titel, bron, gereed, bijzonderheden)
   
   # + upload to GD ----
-  ss <- sheet_write(ss = "1OoQdHgpb6Yr3L7awSt2Ek5oz4TIegQq4YcFUALykB_E",
+  ss <- sheet_write(ss = config$ss_wj_playlistweek,
                     sheet = "plw_items",
                     data = plw_items)
   
@@ -237,7 +242,8 @@ repeat {
   woj_playlists_qfn <- path_join(c("C:", "Users", "nipper", "Documents", "BasieBeats", woj_playlists_fn))
   write_tsv(plw_items, woj_playlists_qfn)
   
-  # WoJ gidsweek ----
+  # WoJ Programme Guide ----
+  flog.info("create programme guide", name = "wojsch")
   # . + prep json ----
   # . + originals with 1 genre ----
   tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
