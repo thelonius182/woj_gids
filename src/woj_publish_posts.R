@@ -2,20 +2,17 @@
 flog.info("publishing...", name = "wojsch")
 
 # init ----
-# init flag variable: when sourcing this script fails, notify the caller by creating this variable.
-# So, make sure it doesn't exist at the start
-if (exists("salsa_source_error")) rm(salsa_source_error)
+# init flag variable, to be removed if the script finishes successfully
+salsa_source_error <- T
 
 # start main control loop
 repeat {
   
   # connect to wordpress-DB ----
-  cur_db_type <- "prd"
-  wp_conn <- get_wp_conn(pm_db_type = cur_db_type)
+  wp_conn <- get_wp_conn(config$wpdb_env)
   
   if (typeof(wp_conn) != "S4") {
-    flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
-    salsa_source_error <- T
+    flog.error(sprintf("connecting to wordpress-DB (%s) failed", config$wpdb_env), name = "wojsch")
     break
   }
   
@@ -40,19 +37,20 @@ repeat {
       0L
     }, 
     error = function(e1) {
-      flog.error(sprintf("SQL-statement to publish the posts failed: %s", conditionMessage(e1)), name = "wojsch")
+      flog.error(sprintf("SQL-statement to publish the posts failed: %s", conditionMessage(e1)), 
+                 name = "wojsch")
       return(1L)
     },
     finally = dbDisconnect(wp_conn)
   )
   
-  if (n_errors == 1) {
-    salsa_source_error <- T
-    
-  } else {
-    flog.info("publishing completed", name = "wojsch")
+  if (n_errors > 0) {
+    break
   }
   
-  # stop main control loop
+  flog.info("publishing completed", name = "wojsch")
+  
+  # exit cleanly from main control loop
+  rm(salsa_source_error)
   break
 }

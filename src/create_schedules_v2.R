@@ -1,13 +1,10 @@
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Create WoJ's week schedules for WordPress and GD-spreadsheet
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-
-flog.info("creating WP-schedule", name = "wojsch")
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Create WoJ Audio Allocation Sheet & Programme Guide
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
 # init ----
-# init flag variable: when sourcing this script fails, notify the caller by creating this variable.
-# So, make sure it doesn't exist at the start
-if (exists("salsa_source_error")) rm(salsa_source_error)
+# init flag variable, to be removed if the script finishes successfully
+salsa_source_error <- T
 
 # enter main control loop
 repeat {
@@ -35,7 +32,7 @@ repeat {
   
   # load WoJ modelrooster ----
   # NB - for some reason, GD gives an error when using 'read_sheet'. So, use 'drive_download' instead.
-  moro <- config$woj_modelrooster
+  moro <- config$ss_woj_modelrooster
   gs_path <- paste0(download_home, "tib_moro.tsv")
   
   n_errors <- tryCatch(
@@ -72,8 +69,8 @@ repeat {
   # load gidsinfo & Lacie-slots ----
   n_errors <- tryCatch(
     {
-      tib_gidsinfo <- read_sheet(paste0(gs_home, config$gidsinfo), sheet = "gids-info")
-      tib_gidsvertalingen <- read_sheet(paste0(gs_home, config$gidsinfo), sheet = "vertalingen NL-EN")
+      tib_gidsinfo <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "gids-info")
+      tib_gidsvertalingen <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "vertalingen NL-EN")
       tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.0") |> 
         mutate(key_ts = as.integer(bc_woj_ymd))
       0L
@@ -146,10 +143,10 @@ repeat {
   }
   
   # prepare Universe rewinds ----
-  wp_conn <- get_wp_conn()
+  wp_conn <- get_wp_conn(config$wpdb_env)
   
   if (typeof(wp_conn) != "S4") {
-    flog.error("db-connection failed", name = "wojsch")
+    flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
     break
   }
   
@@ -329,9 +326,8 @@ repeat {
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")
   
-  # source("src/woj_publish_posts.R", encoding = "UTF-8")
-  
-  # exit from main control loop
+  # exit cleanly from main control loop
+  rm(salsa_source_error)
   break
 }
   

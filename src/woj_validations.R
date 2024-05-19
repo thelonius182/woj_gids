@@ -2,20 +2,18 @@
 flog.info("running validations", name = "wojsch")
 
 # init ----
-# init flag variable: when sourcing this script fails, notify the caller by creating this variable.
-# So, make sure it doesn't exist at the start
-if (exists("salsa_source_error")) rm(salsa_source_error)
+# init flag variable: when sourcing this script fails, notify the caller by not removing this variable.
+salsa_source_error <- T
 
 # enter main control loop
 repeat {
   
   # connect to wordpress-DB ----
   cur_db_type <- "prd"
-  wp_conn <- get_wp_conn(pm_db_type = cur_db_type)
+  wp_conn <- get_wp_conn(config$wpdb_env)
   
   if (typeof(wp_conn) != "S4") {
     flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
-    salsa_source_error <- T
     break
   }
 
@@ -25,7 +23,6 @@ repeat {
   
   if (val_A$n_drafts > 0) {
     flog.error("WordPress still has 'draft'-posts; review & publish those manually first", name = "wojsch")
-    salsa_source_error <- T
     break
   }
   
@@ -55,7 +52,6 @@ repeat {
                                overlap = pgmStart < lag(pgmStop)) |> filter(reverse|overlap)
   if (nrow(val_B1.1) > 0) {
     flog.info("Wordpress has overlapping or reversed slot times (NL)", name = "wojsch")
-    salsa_source_error <- T
     break
   }
   
@@ -85,7 +81,6 @@ repeat {
                                overlap = pgmStart < lag(pgmStop)) |> filter(reverse|overlap)
   if (nrow(val_C1.1) > 0) {
     flog.info("Wordpress has overlapping or reversed slot times (EN)", name = "wojsch")
-    salsa_source_error <- T
     break
   }
   
@@ -95,7 +90,6 @@ repeat {
   
   if (nrow(val_D) > 0) {
     flog.info("WordPress tries to do replays of non-existing originals", name = "wojsch")
-    salsa_source_error <- T
     break
   }
   
@@ -107,7 +101,6 @@ repeat {
   
   if (nrow(val_E) > 0) {
     flog.info("WordPress already has one or more posts in the coming woj-week", name = "wojsch")
-    salsa_source_error <- T
     break
   }
   
@@ -138,6 +131,7 @@ repeat {
   flog.info("validations completed", name = "wojsch")
   dbDisconnect(wp_conn)
   
-  # exit from main control loop
+  # exit cleanly from main control loop
+  rm(salsa_source_error)
   break
 }
