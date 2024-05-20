@@ -94,9 +94,8 @@ repeat {
   }
   
   # PREMATURES ----
-  woj_week_start <- get_czweek_start()
   qry <- read_file("C:/Users/nipper/Documents/cz_queries/woj_premature_posts.sql")
-  qry.1 <- str_replace(qry, "¶ts", woj_week_start)
+  qry.1 <- str_replace(qry, "¶ts", as.character(cz_week_start))
   val_E <- dbGetQuery(wp_conn, qry.1)
   
   if (nrow(val_E) > 0) {

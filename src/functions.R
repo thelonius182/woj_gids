@@ -57,11 +57,23 @@ slot_delta <- function(slot_label_a, slot_label_b, pm_live) {
        regular_rewind = if_else(ts1_idx > ts2_idx & pm_live != "Y", T, F))
 }
 
-slot_sequence <- function(ts_start) {
+# build a list of all required slots for either the latest existing week or for a new one
+slot_sequence_wk <- function(new_week = F) {
+  
+  # calculate start-ts based on the latest json file
+  qfns <- dir_ls(path = "C:/cz_salsa/gidsweek_uploaden/", 
+                 type = "file",
+                 regexp = "WJ_gidsweek_\\d{4}.*[.]json$") |> sort(decreasing = T)
+  
+  seq_start_ts <- str_extract(qfns[1], pattern = "\\d{4}_\\d{2}_\\d{2}") |> ymd(quiet = T)
+  hour(seq_start_ts) <- 13
+  
+  # add 7 days if this should be a new week
+  if (new_week) seq_start_ts <- seq_start_ts + days(7)
   
   all_day_names <- c("ma", "di", "wo", "do", "vr", "za", "zo")
 
-  seq(from = ts_start, to = ts_start + hours(7 * 24 - 1), by = "hours") |> as_tibble() |> 
+  seq(from = seq_start_ts, to = seq_start_ts + hours(7 * 24 - 1), by = "hours") |> as_tibble() |> 
     rename(slot_ts = value) |>
     mutate(day = all_day_names[wday(slot_ts, label = F, week_start = 1)],
            week_vd_mnd = 1 + (day(slot_ts) - 1) %/% 7L,
@@ -150,25 +162,6 @@ get_wallclock <- function(pm_nonstop_start, pm_cum_time) {
 sec2hms <- function(pm_duration_sec) {
   hms1 <- paste0("00:00:", round(pm_duration_sec, 0)) |> hms(roll = TRUE)
   sprintf("%02d:%02d:%02d", hms1@hour, hms1@minute, hms1@.Data)
-}
-
-get_czweek_start <- function(arg_ts = now(tz = "Europe/Amsterdam")) {
-  
-  # when running this on a Thursday between 13:00 and midnight, make it a Friday to force "next week"
-  if (wday(arg_ts, week_start = 1, label = T) == "do" && hour(arg_ts) >= 13) {
-    arg_ts <- arg_ts + days(1)
-  }
-  
-  # get first Thursday 13:00 after arg_ts
-  hour(arg_ts) <- 0
-  minute(arg_ts) <- 0
-  second(arg_ts) <- 0
-  while (wday(arg_ts, week_start = 1, label = T) != "do") {
-    arg_ts <- arg_ts + days(1)
-  }
-  
-  tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m0-%d %H:%M:%S", quiet = T)
-  tmp_format(arg_ts + hours(13))
 }
 
 woj_pick <- function(pm_ids) {

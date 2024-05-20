@@ -13,6 +13,13 @@ qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
 lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
 flog.info("= = = = = START - non-stop tracklists, version 2024-05-19.1 = = = = =", name = "wojsch")
 
+# create time series? ----
+# only when called stand-alone
+if (!exists("salsa_source_main")) {
+  cz_week_slots <- slot_sequence_wk(new_week = F)
+  cz_week_start <- cz_week_slots$slot_ts[1]
+}
+
 repeat {
   # coonect to wordpress-DB ----
   wp_conn <- get_wp_conn(config$wpdb_env)
@@ -30,23 +37,16 @@ repeat {
     break
   }
   
-  # get the week to build: the one for which the latest json file was built
-  qfns <- dir_ls(path = "C:/cz_salsa/gidsweek_uploaden/", 
-                 type = "file",
-                 regexp = "WJ_gidsweek_\\d{4}.*[.]json$") |> sort(decreasing = T)
-  cur_week_start <- str_extract(qfns[1], pattern = "\\d{4}_\\d{2}_\\d{2}") |> ymd(quiet = T)
-  hour(cur_week_start) <- 13
-  wj_weekslots <- slot_sequence(cur_week_start)
+  # get mAirList playlist tracks
+  cur_week_start <- cz_week_start
   hour(cur_week_start) <- 0
   cur_week_stop <- cur_week_start + days(8)
   tmp_format <- stamp("1969-07-20 17:18:19", orders = "%Y-%m-%d %H:%M:%S", quiet = T)
   sq_cur_week_start = tmp_format(cur_week_start)
   sq_cur_week_stop = tmp_format(cur_week_stop)
-  
   flog.info(sprintf("current week start = %s", sq_cur_week_start), name = "wojsch")
   flog.info(sprintf("current week stop = %s", sq_cur_week_stop), name = "wojsch")
   
-  # get mAirList playlist tracks
   qry <- sprintf("
      select pl.slot
      ,  pl.pos
@@ -87,7 +87,7 @@ repeat {
   wp_playlists <- wj_gidsweek |> select(slot_ts, start, minutes, tit_nl, broadcast_type, txt_nl, txt_en)
   
   # limit to NonStop
-  wp_playlists.1 <- wj_weekslots |> select(slot_ts) |> left_join(wp_playlists, by = join_by(slot_ts)) |> 
+  wp_playlists.1 <- cz_week_slots |> select(slot_ts) |> left_join(wp_playlists, by = join_by(slot_ts)) |> 
     fill(start, minutes, tit_nl, txt_nl, txt_en, broadcast_type, .direction = "down") |> 
     filter(broadcast_type == "NonStop")
   

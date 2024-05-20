@@ -3,8 +3,11 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # INIT ----
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid,
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
+
+# signal to all scripts they are called from 'main'
+salsa_source_main <- T
 
 # enter main control loop
 repeat {
@@ -29,8 +32,14 @@ repeat {
   )
   
   if (n_errors > 0) {
-    break
+    flog.info("= = = = = STOP  = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")
+    stop("Accessing Gmail failed")
   }
+  
+  # create time series ----
+  # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
+  cz_week_slots <- slot_sequence_wk(new_week = T)
+  cz_week_start <- cz_week_slots$slot_ts[1]
   
   # run validations ----
   source("src/woj_validations.R", encoding = "UTF-8")
@@ -68,9 +77,9 @@ repeat {
 }
 
 if (exists("salsa_source_error")) {
-  report_msg <- "WoJ-weektaak kon niet voltooid worden - zie 'woj_schedules.log' (Nipper/Desktop)."
+  report_msg <- "Taak kon niet voltooid worden - zie 'woj_schedules.log' (Nipper/Desktop)."
 } else {
-  report_msg <- "WoJ-weektaak is voltooid, geen bijzonderheden."
+  report_msg <- "Taak voltooid, geen bijzonderheden."
 }
 
 # report the result ----
@@ -83,4 +92,4 @@ woj_task_report <- gm_mime() |>
 
 rtn <- gm_send_message(woj_task_report)
 
-flog.info("= = = = = STOP = = = = =", name = "wojsch")
+flog.info("= = = = = STOP  = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")

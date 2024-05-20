@@ -55,6 +55,12 @@ repeat {
   #  + . check modelrooster length ----
   if (sum(tib_moro$minutes) != 50400) {
     flog.error("WoJ modelrooster length is wrong; should be 50.400 minutes", name = "wojsch")
+    chk2 <- tib_moro |> select(day, week_vd_mnd, minutes) |> group_by(day, week_vd_mnd) |> 
+      mutate(day_len = sum(minutes)) |> ungroup() |> select(-minutes) |> distinct() |> 
+      filter(day_len != 1440) |> 
+      mutate(item = str_flatten_comma(paste(day, as.character(week_vd_mnd)))) |> 
+      select(item) |> distinct()
+    flog.error(sprintf("errors (day X of week Y): %s", chk2$item), name = "wojsch")
     break
   }
   
@@ -120,16 +126,19 @@ repeat {
   
   # create time series ----
   # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-  # cz_week_start <- ymd_hm("2024-04-04 13:00")
-  cz_week_start <- get_czweek_start() |> ymd_hms(quiet = T)
-  cz_week_slots <- slot_sequence(cz_week_start)
+  # cz_week_slots <- slot_sequence_wk(new_week = T)
+  # cz_week_start <- cz_week_slots$slot_ts[1]
   
   # combine with 'modelrooster' ----
   cz_week_sched.1 <- cz_week_slots |> inner_join(tib_moro, by = join_by(day, week_vd_mnd, start))
   
   #  + . check schedule length ----
-  if (sum(cz_week_sched.1$minutes) != 10080) {
+  if (sum(cz_week_sched.1$minutes, na.rm = T) != 10080) {
+    chk1 <- cz_week_sched.1 |> select(slot_ts, start, minutes) |> 
+      mutate(stop = slot_ts + minutes(minutes), sync = lead(slot_ts) == stop) |> filter(!sync) 
     flog.error("CZ-week + modelrooster length is wrong (A); should be 10.080 minutes", name = "wojsch")
+    flog.error(sprintf("errors = %s", str_flatten_comma(format(chk1$slot_ts, "%Y-%m-%d_%a%Hu"))), 
+               name = "wojsch")
     break
   }
   
@@ -196,7 +205,7 @@ repeat {
   }
   
   # + . save it ----
-  # so 'update_gids' can use it later
+  # so 'add_ml_tracklists_to_wp' can use it later
   write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
   
   # WoJ Audio Allocation Sheet ----
