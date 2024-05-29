@@ -138,6 +138,11 @@ get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_typ
     filter(wpdmp_slot_title == pm_tit_nl & wpdmp_slot_ts < ymd_upper_limit) |> 
     arrange(desc(wpdmp_slot_ts)) |> head(1) |> select(value = wpdmp_slot_ts)
   
+  # use a nice but arbitrary replacement if there's no rewind
+  if (nrow(cur_ts_rewind) == 0) {
+    cur_ts_rewind <- tibble(value = "2024-05-20 20:00:00")
+  }
+  
   if (cur_ts_rewind$value < pm_week_start) {
     cur_audio_src <- "HiJack"
   } else {

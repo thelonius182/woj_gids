@@ -11,7 +11,7 @@ source("src/functions.R", encoding = "UTF-8")
 
 qfn_log <- path_join(c("C:", "Users", "nipper", "Logs", "woj_schedules.log"))
 lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
-flog.info("= = = = = START - non-stop tracklists, version 2024-05-19.1 = = = = =", name = "wojsch")
+flog.info("adding non-stop tracklists", name = "wojsch")
 
 # create time series? ----
 # only when called stand-alone
@@ -183,5 +183,3 @@ repeat {
   # exit from main control loop
   break
 }
-
-flog.info("= = = = = FIN = = = = = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")

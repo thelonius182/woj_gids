@@ -9,11 +9,10 @@ salsa_source_error <- T
 repeat {
   
   # connect to wordpress-DB ----
-  cur_db_type <- "prd"
   wp_conn <- get_wp_conn(config$wpdb_env)
   
   if (typeof(wp_conn) != "S4") {
-    flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
+    flog.error(sprintf("connecting to wordpress-DB (%s) failed", config$wpdb_env), name = "wojsch")
     break
   }
 

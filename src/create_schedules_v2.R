@@ -272,7 +272,7 @@ repeat {
            `productie-1-mdw` = prod_mdw)
   
   json_ori_gen1 <- woj2json(tib_json_ori_gen1) |> 
-    str_replace_all(pattern = '    "featured-image": 0,\\n', '')
+    str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   
   # . + originals with 2 genres ----
   tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
@@ -297,7 +297,7 @@ repeat {
   
   if (nrow(tib_json_ori_gen2) > 0) {
     json_ori_gen2 <- woj2json(tib_json_ori_gen2) |> 
-      str_replace_all(pattern = '    "featured-image": 0,\\n', '')
+      str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   }
   
   # . + replays ----
