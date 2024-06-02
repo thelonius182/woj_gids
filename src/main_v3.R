@@ -6,7 +6,8 @@
 pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
 
-# signal to all scripts they are called from 'main'
+# signal to 'add_ml_tracklists_to_wp' it will be called from 'main'. 
+# That will tell it to create a new week, instead of refreshing the most recent week
 salsa_source_main <- T
 
 # enter main control loop
