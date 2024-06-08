@@ -116,20 +116,74 @@ repeat {
     rename(genre_2_en = `item-EN`) |> 
     select(woj_bcid, tit_nl, tit_en, prod_taak_nl, prod_taak_en, prod_mdw, 
            genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en, feat_img_ids) |> 
-    mutate(woj_bcid = as.integer(woj_bcid)
-           # feat_img_ids = if_else(is.null(feat_img_ids), list("0"), feat_img_ids)
-    )
+    mutate(woj_bcid = as.integer(woj_bcid))
   
   # randomly choose one of the featured images
-  woj_gidsinfo <- woj_gidsinfo.1 |> rowwise() |> 
+  woj_gidsinfo.2 <- woj_gidsinfo.1 |> rowwise() |> 
     mutate(feat_img_id = woj_pick(feat_img_ids)) |> select(-feat_img_ids) |> ungroup()
+
+  # get title-to-term-ids mapping ----
+  # + \ connect WP-db ----  
+  wp_conn <- get_wp_conn(config$wpdb_env)
   
-  # create time series ----
-  # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
-  # cz_week_slots <- slot_sequence_wk(new_week = T)
-  # cz_week_start <- cz_week_slots$slot_ts[1]
+  if (typeof(wp_conn) != "S4") {
+    flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
+    break
+  }
   
-  # combine with 'modelrooster' ----
+  sql_stmt <- "select tr1.slug, 
+                      replace(tr1.name, '&amp;', '&') as name_cln, 
+                      substr(slug, -2) as lng_code, 
+                      tr1.term_id as wp_title_id, 
+                      tx1.parent as wp_genre_id 
+               from wp_terms tr1 join wp_term_taxonomy tx1 
+                                   on tx1.term_id = tr1.term_id
+               where tx1.taxonomy = 'programma_genre' 
+                 and tx1.parent > 0
+                 and slug regexp '__[^-]+-(en|nl)$'
+               order by 1;
+  "
+  tit2ids.1 <- dbGetQuery(wp_conn, sql_stmt)
+  tit2ids.2 <- tit2ids.1 |> mutate(db_genre = str_extract(slug, "__(.*)-..$", group = 1))
+  tit2ids.2NL <- tit2ids.2 |> filter(lng_code == "nl")
+  tit2ids.2EN <- tit2ids.2 |> filter(lng_code == "en")
+  
+  woj_gidsinfo.3g1 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
+    filter(!is.na(woj_bcid) & is.na(genre_2_nl))
+  
+  woj_gidsinfo.3g2 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
+    filter(!is.na(woj_bcid) & !is.na(genre_2_nl))
+  
+  woj_gidsinfo.3g1NL <- woj_gidsinfo.3g1 |> 
+    left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_1_nl == db_genre))
+
+  woj_gidsinfo.3g2NL <- woj_gidsinfo.3g2 |> 
+    left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_2_nl == db_genre))
+
+  woj_gidsinfo.3g1EN <- woj_gidsinfo.3g1 |> 
+    left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_1_nl == db_genre))
+  
+  woj_gidsinfo.3g2EN <- woj_gidsinfo.3g2 |> 
+    left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_2_nl == db_genre))
+  
+  woj_gidsinfo <- woj_gidsinfo.3g1EN |> 
+    bind_rows(woj_gidsinfo.3g1NL) |> 
+    bind_rows(woj_gidsinfo.3g2NL) |> 
+    bind_rows(woj_gidsinfo.3g2EN) 
+  
+  woj_gidsinfo_pvt <- woj_gidsinfo |> 
+    pivot_wider(names_from = lng_code, values_from = c(slug, wp_title_id, wp_genre_id))
+  
+  #  + . check id's complete ----
+  woj_gidsinfo_err <- woj_gidsinfo_pvt |> filter(if_any(starts_with("wp_"), is.na))
+  
+  if (nrow(woj_gidsinfo_err) > 0) {
+    flog.error("Missing title/genre-id's; WP/Genre and GD/WP-gidsinfo don't match", name = "wojsch")
+    flog.error(sprintf("errors = %s", str_flatten_comma(woj_gidsinfo_err$tit_nl)), name = "wojsch")
+    break
+  }
+  
+  # add 'modelrooster' to week ----
   cz_week_sched.1 <- cz_week_slots |> inner_join(tib_moro, by = join_by(day, week_vd_mnd, start))
   
   #  + . check schedule length ----
@@ -143,7 +197,8 @@ repeat {
   }
   
   # combine with 'wp-gidsinfo' ----
-  cz_week_sched.2 <- cz_week_sched.1 |> inner_join(woj_gidsinfo, by = join_by(broadcast_id == woj_bcid))
+  cz_week_sched.2 <- cz_week_sched.1 |> 
+    inner_join(woj_gidsinfo_pvt, by = join_by(broadcast_id == woj_bcid))
   
   #  + . check schedule length ----
   if (sum(cz_week_sched.2$minutes) != 10080) {
@@ -152,13 +207,6 @@ repeat {
   }
   
   # prepare Universe rewinds ----
-  wp_conn <- get_wp_conn(config$wpdb_env)
-  
-  if (typeof(wp_conn) != "S4") {
-    flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
-    break
-  }
-  
   qry <- "select po1.post_date as wpdmp_slot_ts, 
                  replace(po1.post_title, '&amp;', '&') as wpdmp_slot_title
           from wp_posts po1 
@@ -237,9 +285,25 @@ repeat {
            gereed = F, bijzonderheden = " ") |> select(uitzending, titel, bron, gereed, bijzonderheden)
   
   # + upload to GD ----
+  plw_sheet_name <- format(cz_week_start, "plw_%Y-%m-%d")
   ss <- sheet_write(ss = config$ss_wj_playlistweek,
-                    sheet = "plw_items",
+                    sheet = plw_sheet_name,
                     data = plw_items)
+  
+  # + create checkboxes ----
+  rule_checkbox <- googlesheets4:::new(
+    "DataValidationRule",
+    condition = googlesheets4:::new_BooleanCondition(type = "BOOLEAN"),
+    inputMessage = "Lorem ipsum dolor sit amet",
+    strict = TRUE,
+    showCustomUi = TRUE
+  )
+  
+  googlesheets4:::range_add_validation(
+    ss = config$ss_wj_playlistweek, 
+    range = paste0(plw_sheet_name, "!D2:D"), 
+    rule = rule_checkbox
+  )
   
   flog.info("WJ-playistweek has been replaced on GD", name = "wojsch")
   
@@ -250,22 +314,23 @@ repeat {
   
   # WoJ Programme Guide ----
   flog.info("create programme guide", name = "wojsch")
+  
   # . + prep json ----
-  # . + originals with 1 genre ----
+  # . \ originals with 1 genre ----
   tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id, 
-           -genre_2_nl, -genre_2_en) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    select(slot_ts, minutes, broadcast_id, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
+           starts_with("wp_")) |> 
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
     rename(`titel-nl` = tit_nl,
            `titel-en` = tit_en,
            `genre-1-nl` = genre_1_nl,
            `genre-1-en` = genre_1_en,
-           `std.samenvatting-nl` = txt_nl,
-           `std.samenvatting-en` = txt_en,
+           `samenvatting-nl` = txt_nl,
+           `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,
            `productie-1-taak-nl` = prod_taak_nl,
            `productie-1-taak-en` = prod_taak_en,
@@ -274,22 +339,22 @@ repeat {
   json_ori_gen1 <- woj2json(tib_json_ori_gen1) |> 
     str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   
-  # . + originals with 2 genres ----
+  # . \ originals with 2 genres ----
   tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    select(slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
     rename(`titel-nl` = tit_nl,
            `titel-en` = tit_en,
            `genre-1-nl` = genre_1_nl,
            `genre-1-en` = genre_1_en,
            `genre-2-nl` = genre_2_nl,
            `genre-2-en` = genre_2_en,
-           `std.samenvatting-nl` = txt_nl,
-           `std.samenvatting-en` = txt_en,
+           `samenvatting-nl` = txt_nl,
+           `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,
            `productie-1-taak-nl` = prod_taak_nl,
            `productie-1-taak-en` = prod_taak_en,
@@ -300,20 +365,20 @@ repeat {
       str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   }
   
-  # . + replays ----
+  # . \ replays ----
   tib_json_rep <- cz_week_sched.3 |> filter(!is.na(ts_rewind)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, ts_rewind) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    select(slot_ts, minutes, ts_rewind) |> 
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj",
            `herhaling-van-post-type` = "programma",
            `herhaling-van` = format(ts_rewind, "%Y-%m-%d %H:%M")) |> 
-    select(obj_name, `post-type`, start, stop, everything(), -minutes, -ts_rewind)
+    select(obj_name, `post-type`, start, stop, everything(), -minutes, -ts_rewind, -slot_ts)
   
   json_rep <- woj2json(tib_json_rep)
   
-  # . + join them ----
+  # . \ join them ----
   cz_week_json_qfn <- file_temp(pattern = "cz_week_json", ext = "json")
   file_create(cz_week_json_qfn)
   write_file(json_ori_gen1, cz_week_json_qfn, append = F)
@@ -328,9 +393,9 @@ repeat {
   temp_json_file.1 <- read_file(cz_week_json_qfn)
   temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
   
-  # . + store it ----
-  final_json_qfn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
-  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
+  # . \ store it ----
+  final_json_ufn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
+  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_ufn)), 
              append = F)
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")

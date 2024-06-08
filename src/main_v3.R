@@ -4,10 +4,9 @@
 
 # INIT ----
 pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr, RPostgres,
-               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted)
+               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted, httr)
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("minutes", "lubridate")
+conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
 
 # signal to 'add_ml_tracklists_to_wp' it will be called from 'main'. 
 # That will tell it to create a new week, instead of refreshing the most recent week
@@ -19,7 +18,7 @@ repeat {
   source("src/functions.R", encoding = "UTF-8")
   config <- read_yaml("config.yaml")
   lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-  flog.info("= = = = = START - WoJ Schedules, version 2024-05-19.1 = = = = =", name = "wojsch")
+  flog.info("= = = = = START - WoJ Schedules, version 2024-06-08.1 = = = = =", name = "wojsch")
   flog.info(sprintf("using db = %s", config$wpdb_env), name = "wojsch")
   
   # say Hello to Gmail

@@ -1,12 +1,3 @@
-# Load necessary packages
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr,
-               stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
-
-source("src/functions.R", encoding = "UTF-8")
-config <- read_yaml("config.yaml")
-lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-flog.info("= = = = = START - upload Programme Guide = = = = = = = = = = =", name = "wojsch")
-
 # init flag variable, to be removed if the script finishes successfully
 salsa_source_error <- T
 
@@ -40,19 +31,22 @@ repeat {
     query_string <- list_to_query(json_data[[k1]])
     url_with_query <- paste0(config$wp_endpoint, 
                              "?action=import-program-item&", 
-                             query_string,
-                             "&import-hash=",
-                             new_import_hash)
+                             query_string)
+    # url_with_query <- paste0(config$wp_endpoint, 
+    #                          "?action=import-program-item&", 
+    #                          query_string,
+    #                          "&import-hash=",
+    #                          new_import_hash)
     
-    flog.info(query_string, name = "wojsch")
+    flog.info(url_with_query, name = "wojsch")
     
     # Send the request
-    # response <- GET(url_with_query)
-    # 
-    # # Check the response
-    # if (status_code(response) != 200L || content(response, "text") != "success") {
-    #   flog.error(sprintf("this post failed: %s", k1), name = "wojsch")
-    # }
+    response <- GET(url_with_query)
+
+    # Check the response
+    if (status_code(response) != 200L || content(response, "text") != "success") {
+      flog.error(sprintf("this post failed: %s", k1), name = "wojsch")
+    }
   }
   
   # exit cleanly from main control loop
