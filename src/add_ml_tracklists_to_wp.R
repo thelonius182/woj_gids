@@ -3,7 +3,7 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # the packages to use ----
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs,
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, RPostgres,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
 
 config <- read_yaml("config.yaml")
