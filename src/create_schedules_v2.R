@@ -116,10 +116,11 @@ repeat {
     rename(genre_2_en = `item-EN`) |> 
     select(woj_bcid, tit_nl, tit_en, prod_taak_nl, prod_taak_en, prod_mdw, 
            genre_1_nl, genre_1_en, genre_2_nl, genre_2_en, txt_nl, txt_en, feat_img_ids) |> 
-    mutate(woj_bcid = as.integer(woj_bcid))
+    mutate(woj_bcid = as.integer(woj_bcid),
+           across(starts_with("genre"), str_to_lower))
   
   # randomly choose one of the featured images
-  woj_gidsinfo.2 <- woj_gidsinfo.1 |> rowwise() |> 
+  woj_gidsinfo.2 <- woj_gidsinfo.1 |> filter(!is.na(woj_bcid)) |> rowwise() |> 
     mutate(feat_img_id = woj_pick(feat_img_ids)) |> select(-feat_img_ids) |> ungroup()
 
   # get title-to-term-ids mapping ----
@@ -144,35 +145,61 @@ repeat {
                order by 1;
   "
   tit2ids.1 <- dbGetQuery(wp_conn, sql_stmt)
-  tit2ids.2 <- tit2ids.1 |> mutate(db_genre = str_extract(slug, "__(.*)-..$", group = 1))
-  tit2ids.2NL <- tit2ids.2 |> filter(lng_code == "nl")
-  tit2ids.2EN <- tit2ids.2 |> filter(lng_code == "en")
+  tit2ids.2 <- tit2ids.1 |> mutate(db_genre = str_extract(slug, "__(.*)-..$", group = 1),
+                                   db_slug = str_extract(slug, "(.*)__.*$", group = 1)) |> 
+    select(name_cln, db_genre, lng_code, wp_title_id, wp_genre_id)
   
-  woj_gidsinfo.3g1 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
-    filter(!is.na(woj_bcid) & is.na(genre_2_nl))
+  woj_gidsinfo.3 <- tibble()
   
-  woj_gidsinfo.3g2 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
-    filter(!is.na(woj_bcid) & !is.na(genre_2_nl))
+  for (cur_bcid in woj_gidsinfo.2$woj_bcid) {
+    
+    cur_gi <- woj_gidsinfo.2 |> filter(woj_bcid == cur_bcid)
+    
+    gi_row <- tibble(title_id.NL1 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
+                     genre_id.NL1 = woj_ids("G", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
+                     title_id.NL2 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_2_nl, "nl"),
+                     genre_id.NL2 = woj_ids("G", cur_gi$tit_nl, cur_gi$genre_2_nl, "nl"),
+                     title_id.EN1 = woj_ids("T", cur_gi$tit_en, cur_gi$genre_1_en, "en"),
+                     genre_id.EN1 = woj_ids("G", cur_gi$tit_en, cur_gi$genre_1_en, "en"),
+                     title_id.EN2 = woj_ids("T", cur_gi$tit_en, cur_gi$genre_2_en, "en"),
+                     genre_id.EN2 = woj_ids("G", cur_gi$tit_en, cur_gi$genre_2_en, "en"))
   
-  woj_gidsinfo.3g1NL <- woj_gidsinfo.3g1 |> 
-    left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_1_nl == db_genre))
-
-  woj_gidsinfo.3g2NL <- woj_gidsinfo.3g2 |> 
-    left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_2_nl == db_genre))
-
-  woj_gidsinfo.3g1EN <- woj_gidsinfo.3g1 |> 
-    left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_1_nl == db_genre))
-  
-  woj_gidsinfo.3g2EN <- woj_gidsinfo.3g2 |> 
-    left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_2_nl == db_genre))
-  
-  woj_gidsinfo <- woj_gidsinfo.3g1EN |> 
-    bind_rows(woj_gidsinfo.3g1NL) |> 
-    bind_rows(woj_gidsinfo.3g2NL) |> 
-    bind_rows(woj_gidsinfo.3g2EN) 
-  
-  woj_gidsinfo_pvt <- woj_gidsinfo |> 
-    pivot_wider(names_from = lng_code, values_from = c(slug, wp_title_id, wp_genre_id))
+    woj_gidsinfo.3 <- woj_gidsinfo.3 |> bind_rows(gi_row)
+  }
+  # tit2ids.2pvt <- tit2ids.2 |> 
+  #   group_by(db_slug, lng_code) |> mutate(genre_idx = row_number()) |> ungroup() |> 
+  #   select(-db_genre) |> 
+  #   pivot_wider(names_from = c(lng_code, genre_idx), values_from = c(name_cln, wp_title_id, wp_genre_id))
+  #   # pivot_wider(names_from = genre_idx, values_from = starts_with("wp_"))
+  # 
+  # tit2ids.2EN <- tit2ids.2 |> filter(lng_code == "en")
+  # tit2ids.2NL <- tit2ids.2 |> filter(lng_code == "nl")
+  # 
+  # woj_gidsinfo.3g1 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
+  #   filter(!is.na(woj_bcid) & is.na(genre_2_nl))
+  # 
+  # woj_gidsinfo.3g1NL <- woj_gidsinfo.3g1 |> 
+  #   left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_1_nl == db_genre))
+  # 
+  # woj_gidsinfo.3g1EN <- woj_gidsinfo.3g1 |> 
+  #   left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_1_nl == db_genre))
+  # 
+  # woj_gidsinfo.3g2 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
+  #   filter(!is.na(woj_bcid) & !is.na(genre_2_nl))
+  # 
+  # woj_gidsinfo.3g2NL <- woj_gidsinfo.3g2 |> 
+  #   left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_2_nl == db_genre))
+  # 
+  # woj_gidsinfo.3g2EN <- woj_gidsinfo.3g2 |> 
+  #   left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_2_nl == db_genre))
+  # 
+  # woj_gidsinfo <- woj_gidsinfo.3g1EN |> 
+  #   bind_rows(woj_gidsinfo.3g1NL) |> 
+  #   bind_rows(woj_gidsinfo.3g2NL) |> 
+  #   bind_rows(woj_gidsinfo.3g2EN) 
+  # 
+  # woj_gidsinfo_pvt <- woj_gidsinfo |> 
+  #   pivot_wider(names_from = lng_code, values_from = c(slug, wp_title_id, wp_genre_id))
   
   #  + . check id's complete ----
   woj_gidsinfo_err <- woj_gidsinfo_pvt |> filter(if_any(starts_with("wp_"), is.na))
@@ -318,17 +345,19 @@ repeat {
   # . + prep json ----
   # . \ originals with 1 genre ----
   tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
-    select(slot_ts, minutes, broadcast_id, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
-           starts_with("wp_")) |> 
+    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
+           starts_with("wp_"), broadcast_id) |> 
     mutate(obj_name = fmt_utc_ts(slot_ts), 
            stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
            start = format(slot_ts, "%Y-%m-%d %H:%M"),
-           `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
-    rename(`titel-nl` = tit_nl,
-           `titel-en` = tit_en,
-           `genre-1-nl` = genre_1_nl,
-           `genre-1-en` = genre_1_en,
+           `post-type` = "programma_woj",
+           `upload-batch` = paste("bcid", broadcast_id, sep = "-")) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), 
+           -minutes, -slot_ts, -broadcast_id) |> 
+    rename(`titel-nl` = wp_title_id_nl,
+           `titel-en` = wp_title_id_en,
+           `genre-1-nl` = wp_genre_id_nl,
+           `genre-1-en` = wp_genre_id_en,
            `samenvatting-nl` = txt_nl,
            `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,
@@ -340,19 +369,23 @@ repeat {
     str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   
   # . \ originals with 2 genres ----
-  tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
-    select(slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
+  # tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
+  tib_json_ori_gen2 <- cz_week_sched.3 |> filter(!is.na(genre_2_nl)) |> 
+    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
+           starts_with("wp_"), broadcast_id) |> 
     mutate(obj_name = fmt_utc_ts(slot_ts), 
            stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
            start = format(slot_ts, "%Y-%m-%d %H:%M"),
-           `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
-    rename(`titel-nl` = tit_nl,
-           `titel-en` = tit_en,
-           `genre-1-nl` = genre_1_nl,
-           `genre-1-en` = genre_1_en,
-           `genre-2-nl` = genre_2_nl,
-           `genre-2-en` = genre_2_en,
+           `post-type` = "programma_woj",
+           `upload-batch` = paste("bcid", broadcast_id, sep = "-")) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), 
+           -minutes, -slot_ts, -broadcast_id) |> 
+    rename(`titel-nl` = wp_title_id_nl,
+           `titel-en` = wp_title_id_en,
+           `genre-1-nl` = wp_genre_id_nl,
+           `genre-1-en` = wp_genre_id_en,
+           `genre-2-nl` = wp_genre_id_nl,
+           `genre-1-en` = wp_genre_id_en,
            `samenvatting-nl` = txt_nl,
            `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,

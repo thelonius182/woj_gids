@@ -195,3 +195,11 @@ list_to_query <- function(lst) {
 url_encode_param <- function(value) {
   URLencode(as.character(value), reserved = TRUE)
 }
+
+woj_ids <- function(pm_what, pm_title, pm_genre, pm_lang) {
+  
+  out <- tit2ids.2 |> filter(name_cln == pm_title & db_genre == pm_genre & lng_code == pm_lang) 
+  
+  if (pm_what == "T") out$wp_title_id else out$wp_genre_id
+  
+}
