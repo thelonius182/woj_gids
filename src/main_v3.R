@@ -19,7 +19,7 @@ repeat {
   source("src/functions.R", encoding = "UTF-8")
   config <- read_yaml("config.yaml")
   lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-  flog.info("= = = = = START - WoJ Schedules, version 2024-05-19.1 = = = = =", name = "wojsch")
+  flog.info("= = = = = START - WoJ Schedules, version 2024-06-13.1 = = = = =", name = "wojsch")
   flog.info(sprintf("using db = %s", config$wpdb_env), name = "wojsch")
   
   # say Hello to Gmail
@@ -97,4 +97,4 @@ woj_task_report <- gm_mime() |>
 
 rtn <- gm_send_message(woj_task_report)
 
-flog.info("= = = = = STOP  = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")
+flog.info("= = = = = = = = = = = = = = F I N = = = = = = = = = = = = = = =", name = "wojsch")

@@ -3,7 +3,7 @@
 # sqlstmt <- "show variables like 'character_set_client'"
 # result <- dbGetQuery(conn = wp_conn, statement = sqlstmt)
 get_wp_conn <- function(pm_db_type = "prd") {
-  
+
   if (pm_db_type == "prd") {
     db_host <- key_get(service = paste0("sql-wp", pm_db_type, "_host"))
     db_user <- key_get(service = paste0("sql-wp", pm_db_type, "_user"))
@@ -16,11 +16,11 @@ get_wp_conn <- function(pm_db_type = "prd") {
     db_password <- woj_gids_creds_dev$db_password
     db_name <- woj_gids_creds_dev$db_name
   }
-  
+
   db_port <- 3306
   # flog.appender(appender.file("/Users/nipper/Logs/nipper.log"), name = "nipperlog")
-  
-  grh_conn <- tryCatch( 
+
+  grh_conn <- tryCatch(
     {
       dbConnect(drv = MySQL(), user = db_user, password = db_password,
                 dbname = db_name, host = db_host, port = db_port)
@@ -31,7 +31,7 @@ get_wp_conn <- function(pm_db_type = "prd") {
       return("connection-error")
     }
   )
-  
+
   return(grh_conn)
 }
 
@@ -101,14 +101,14 @@ woj2json <- function(pm_tib_json) {
 }
 
 get_mal_conn <- function() {
-  
+
   # just to prevent uploading credentials to github
   basie_creds <- read_rds("C:/Users/nipper/Documents/BasieBeats/basie.creds")
-  
-  result <- tryCatch( 
+
+  result <- tryCatch(
     dbConnect(RPostgres::Postgres(),
-              dbname = 'mairlist7', 
-              host = '192.168.178.91', 
+              dbname = 'mairlist7',
+              host = '192.168.178.91',
               port = 5432,
               user = basie_creds$usr,
               password = basie_creds$pwd),
@@ -117,7 +117,7 @@ get_mal_conn <- function() {
       return("connection-error")
     }
   )
-  
+
   return(result)
 }
 
@@ -194,4 +194,22 @@ list_to_query <- function(lst) {
 # Use URLencode with reserved = TRUE to ensure all special characters are encoded
 url_encode_param <- function(value) {
   URLencode(as.character(value), reserved = TRUE)
+}
+
+get_wp_ds <- function(pm_env) {
+  
+  if (pm_env == "prd") {
+    db_env <- "wpprd_mariadb"
+  } else {
+    db_env <- "wpdev_mariadb"
+  }
+
+  result <- tryCatch( {
+    grh_conn <- dbConnect(odbc::odbc(), db_env, timeout = 10)
+  },
+  error = function(cond) {
+    return("connection-error")
+  })
+  
+  return(result)
 }

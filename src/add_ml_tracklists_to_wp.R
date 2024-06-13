@@ -1,9 +1,9 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Add non-stop ML-tracklists to WP-posts
+# Add/Refresh non-stop ML-tracklists to WP-posts
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # the packages to use ----
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, RPostgres,
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, RMySQL, RPostgres,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger)
 
 config <- read_yaml("config.yaml")
@@ -14,14 +14,14 @@ lg_ini <- flog.appender(appender.file(qfn_log), "wojsch")
 flog.info("= = = = = = = adding/refreshing non-stop tracklists = = = = = =", name = "wojsch")
 
 # create time series? ----
-# only when called stand-alone
+# only when called to refresh
 if (!exists("salsa_source_main")) {
   cz_week_slots <- slot_sequence_wk(new_week = F)
   cz_week_start <- cz_week_slots$slot_ts[1]
 }
 
 repeat {
-  # coonect to wordpress-DB ----
+  # connect to wordpress-DB ----
   wp_conn <- get_wp_conn(config$wpdb_env)
   
   if (typeof(wp_conn) != "S4") {
@@ -59,13 +59,12 @@ repeat {
      join items it on it.idx = pl.item
      left join item_attributes ia on ia.item = pl.item
      where pl.slot between '%s' and '%s'
-     	and it.storage not in (10, 11, 17) -- no Bumpers, no Semi-live's
+     	 and it.storage not in (10, 11, 17) -- no Bumpers, no Semi-live's
      order by pl.slot, pl.pos asc;",
      sq_cur_week_start, sq_cur_week_stop
   )
   
   ml_tracks <- dbGetQuery(mal_conn, qry)
-  
   dbDisconnect(mal_conn)
   
   ml_tracks.1 <- ml_tracks |> mutate(attr_name = str_to_lower(attr_name))
@@ -146,8 +145,10 @@ repeat {
 </a>
 &nbsp;
 &nbsp;'
-    
-    sql_gidstekst <- paste0(sql_gidstekst, regel, "\n") %>% str_replace_all("[']", "&#39;")
+
+    # bring db-encodings in sync. mAirlist is UTF-8, WP is cp850 (Latin1)
+    sql_gidstekst1 <- paste0(sql_gidstekst, regel, "\n") |> str_replace_all("[']", "&#39;")
+    sql_gidstekst2 <- iconv(sql_gidstekst1, from = "UTF-8", to = "Latin1")
     
     upd_stmt01 <- sprintf(
       "select id from wp_posts where post_date = '%s' and post_type = 'programma_woj' order by 1;",
@@ -162,18 +163,18 @@ repeat {
     for (u1 in 1:nrow(dsSql01)) {
       
       if (u1 == 1) {
-        sql_gidstekst1 <- sql_gidstekst |> str_replace("@HEADER", hdr_nl_df)
+        sql_gidstekst3 <- sql_gidstekst2 |> str_replace("@HEADER", hdr_nl_df)
       } else {
-        sql_gidstekst1 <- sql_gidstekst |> str_replace("@HEADER", hdr_en_df)
+        sql_gidstekst3 <- sql_gidstekst2 |> str_replace("@HEADER", hdr_en_df)
       }
       
+      # sql_gidstekst3 <- str_replace_all(sql_gidstekst2, "'", "&apos;")
       upd_stmt02 <- sprintf(
-        "update wp_posts set post_content = convert(cast(convert('%s' using latin1) as binary) using utf8mb4) 
-         where id = %i;",
-        str_replace_all(sql_gidstekst1, "'", "&apos;"),
+        "update wp_posts set post_content = '%s' where id = %s;",
+        str_replace_all(sql_gidstekst3, "[']", "&apos;"), 
         dsSql01$id[u1]
       )
-      
+
       upd_result <- dbExecute(wp_conn, upd_stmt02)
     }
   }
@@ -184,4 +185,4 @@ repeat {
   break
 }
 
-flog.info("= = = = = = = = = = = =   F I N I S H E D   = = = = = = = = = =", name = "wojsch")
+flog.info("ml-tracklists added/refreshed", name = "wojsch")
