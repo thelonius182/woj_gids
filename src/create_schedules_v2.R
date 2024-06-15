@@ -253,13 +253,13 @@ repeat {
   # . + prep json ----
   # . + originals with 1 genre ----
   tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id, 
+    select(slot_ts, minutes, tit_nl:txt_en, feat_img_id, 
            -genre_2_nl, -genre_2_en) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
     rename(`titel-nl` = tit_nl,
            `titel-en` = tit_en,
            `genre-1-nl` = genre_1_nl,
@@ -276,12 +276,12 @@ repeat {
   
   # . + originals with 2 genres ----
   tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    select(slot_ts, minutes, tit_nl:txt_en, feat_img_id) |> 
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj") |> 
-    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes) |> 
+    select(obj_name, `post-type`, feat_img_id, start, stop, everything(), -minutes, -slot_ts) |> 
     rename(`titel-nl` = tit_nl,
            `titel-en` = tit_en,
            `genre-1-nl` = genre_1_nl,
@@ -302,10 +302,10 @@ repeat {
   
   # . + replays ----
   tib_json_rep <- cz_week_sched.3 |> filter(!is.na(ts_rewind)) |> 
-    select(obj_name = slot_ts, start = slot_ts, minutes, ts_rewind) |> 
-    mutate(obj_name = fmt_utc_ts(obj_name), 
-           stop = format(start + minutes(minutes), "%Y-%m-%d %H:%M"),
-           start = format(start, "%Y-%m-%d %H:%M"),
+    select(slot_ts, minutes, ts_rewind) |> 
+    mutate(obj_name = fmt_utc_ts(slot_ts), 
+           stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
+           start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj",
            `herhaling-van-post-type` = "programma",
            `herhaling-van` = format(ts_rewind, "%Y-%m-%d %H:%M")) |> 
@@ -329,8 +329,8 @@ repeat {
   temp_json_file.2 <- temp_json_file.1 |> str_replace_all("[}][{]", ",")
   
   # . + store it ----
-  final_json_qfn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
-  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_qfn)), 
+  final_json_fn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
+  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_fn)), 
              append = F)
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")

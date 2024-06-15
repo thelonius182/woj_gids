@@ -196,20 +196,9 @@ url_encode_param <- function(value) {
   URLencode(as.character(value), reserved = TRUE)
 }
 
-get_wp_ds <- function(pm_env) {
+woj_ids <- function(pm_what, pm_title, pm_genre, pm_lang) {
   
-  if (pm_env == "prd") {
-    db_env <- "wpprd_mariadb"
-  } else {
-    db_env <- "wpdev_mariadb"
-  }
-
-  result <- tryCatch( {
-    grh_conn <- dbConnect(odbc::odbc(), db_env, timeout = 10)
-  },
-  error = function(cond) {
-    return("connection-error")
-  })
+  out <- tit2ids.2 |> filter(name_cln == pm_title & db_genre == pm_genre & lng_code == pm_lang) 
   
-  return(result)
+  if (pm_what == "T") out$wp_title_id else out$wp_genre_id
 }
