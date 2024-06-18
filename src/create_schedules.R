@@ -154,7 +154,7 @@ repeat {
   for (cur_bcid in woj_gidsinfo.2$woj_bcid) {
     
     cur_gi <- woj_gidsinfo.2 |> filter(woj_bcid == cur_bcid)
-    
+    title_id.NL1 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl")
     gi_row <- tibble(title_id.NL1 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
                      genre_id.NL1 = woj_ids("G", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
                      title_id.NL2 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_2_nl, "nl"),
