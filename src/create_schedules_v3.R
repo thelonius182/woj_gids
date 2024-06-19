@@ -237,9 +237,25 @@ repeat {
            gereed = F, bijzonderheden = " ") |> select(uitzending, titel, bron, gereed, bijzonderheden)
   
   # + upload to GD ----
+  plw_sheet_name <- format(cz_week_start, "plw_%Y-%m-%d")
   ss <- sheet_write(ss = config$ss_wj_playlistweek,
-                    sheet = "plw_items",
+                    sheet = plw_sheet_name,
                     data = plw_items)
+  
+  # + create checkboxes ----
+  rule_checkbox <- googlesheets4:::new(
+    "DataValidationRule",
+    condition = googlesheets4:::new_BooleanCondition(type = "BOOLEAN"),
+    inputMessage = "Lorem ipsum dolor sit amet",
+    strict = TRUE,
+    showCustomUi = TRUE
+  )
+  
+  googlesheets4:::range_add_validation(
+    ss = config$ss_wj_playlistweek, 
+    range = paste0(plw_sheet_name, "!D2:D"), 
+    rule = rule_checkbox
+  )
   
   flog.info("WJ-playistweek has been replaced on GD", name = "wojsch")
   

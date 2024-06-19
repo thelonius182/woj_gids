@@ -6,8 +6,7 @@
 pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr, RPostgres,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted)
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("minutes", "lubridate")
+conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
 
 # signal to 'add_ml_tracklists_to_wp' it will be called from 'main'. 
 # That will tell it to create a new week, instead of refreshing the most recent week
@@ -54,7 +53,7 @@ repeat {
   } 
   
   # create schedules ----
-  source("src/create_schedules_v2.R", encoding = "UTF-8")
+  source("src/create_schedules_v3.R", encoding = "UTF-8")
   
   if (exists("salsa_source_error")) {
     break
