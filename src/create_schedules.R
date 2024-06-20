@@ -146,60 +146,35 @@ repeat {
   "
   tit2ids.1 <- dbGetQuery(wp_conn, sql_stmt)
   tit2ids.2 <- tit2ids.1 |> mutate(db_genre = str_extract(slug, "__(.*)-..$", group = 1),
-                                   db_slug = str_extract(slug, "(.*)__.*$", group = 1)) |> 
+                                   db_slug = str_extract(slug, "(.*)__.*$", group = 1),
+                                   wp_title_id = as.integer(wp_title_id),
+                                   wp_genre_id = as.integer(wp_genre_id)) |> 
     select(name_cln, db_genre, lng_code, wp_title_id, wp_genre_id)
   
   woj_gidsinfo.3 <- tibble()
-  
+
   for (cur_bcid in woj_gidsinfo.2$woj_bcid) {
     
     cur_gi <- woj_gidsinfo.2 |> filter(woj_bcid == cur_bcid)
-    title_id.NL1 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl")
-    gi_row <- tibble(title_id.NL1 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
-                     genre_id.NL1 = woj_ids("G", cur_gi$tit_nl, cur_gi$genre_1_nl, "nl"),
-                     title_id.NL2 = woj_ids("T", cur_gi$tit_nl, cur_gi$genre_2_nl, "nl"),
-                     genre_id.NL2 = woj_ids("G", cur_gi$tit_nl, cur_gi$genre_2_nl, "nl"),
-                     title_id.EN1 = woj_ids("T", cur_gi$tit_en, cur_gi$genre_1_en, "en"),
-                     genre_id.EN1 = woj_ids("G", cur_gi$tit_en, cur_gi$genre_1_en, "en"),
-                     title_id.EN2 = woj_ids("T", cur_gi$tit_en, cur_gi$genre_2_en, "en"),
-                     genre_id.EN2 = woj_ids("G", cur_gi$tit_en, cur_gi$genre_2_en, "en"))
+    
+    # woj_id's are looked up in tit2ids.2, where genre names are extracted from wp_terms.slug. The slug has Dutch
+    # genre names for both languages. Hence the 3rd parameter in woj_ids() is '-nl' even if the 4th is 'en'
+    gi_row <- tribble(
+      ~bcid, ~tid_n1, ~gid_n1, ~tid_n2, ~gid_n2, ~tid_e1, ~gid_e1, ~tid_e2, ~gid_e2,
+      cur_bcid,
+      woj_ids(cur_gi$tit_nl, cur_gi$genre_1_nl, "nl")$wp_title_id,
+      woj_ids(cur_gi$tit_nl, cur_gi$genre_1_nl, "nl")$wp_genre_id,
+      woj_ids(cur_gi$tit_nl, cur_gi$genre_2_nl, "nl")$wp_title_id,
+      woj_ids(cur_gi$tit_nl, cur_gi$genre_2_nl, "nl")$wp_genre_id,
+      woj_ids(cur_gi$tit_en, cur_gi$genre_1_nl, "en")$wp_title_id,
+      woj_ids(cur_gi$tit_en, cur_gi$genre_1_nl, "en")$wp_genre_id,
+      woj_ids(cur_gi$tit_en, cur_gi$genre_2_nl, "en")$wp_title_id,
+      woj_ids(cur_gi$tit_en, cur_gi$genre_2_nl, "en")$wp_genre_id)
   
     woj_gidsinfo.3 <- woj_gidsinfo.3 |> bind_rows(gi_row)
   }
-  # tit2ids.2pvt <- tit2ids.2 |> 
-  #   group_by(db_slug, lng_code) |> mutate(genre_idx = row_number()) |> ungroup() |> 
-  #   select(-db_genre) |> 
-  #   pivot_wider(names_from = c(lng_code, genre_idx), values_from = c(name_cln, wp_title_id, wp_genre_id))
-  #   # pivot_wider(names_from = genre_idx, values_from = starts_with("wp_"))
-  # 
-  # tit2ids.2EN <- tit2ids.2 |> filter(lng_code == "en")
-  # tit2ids.2NL <- tit2ids.2 |> filter(lng_code == "nl")
-  # 
-  # woj_gidsinfo.3g1 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
-  #   filter(!is.na(woj_bcid) & is.na(genre_2_nl))
-  # 
-  # woj_gidsinfo.3g1NL <- woj_gidsinfo.3g1 |> 
-  #   left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_1_nl == db_genre))
-  # 
-  # woj_gidsinfo.3g1EN <- woj_gidsinfo.3g1 |> 
-  #   left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_1_nl == db_genre))
-  # 
-  # woj_gidsinfo.3g2 <- woj_gidsinfo.2 |> mutate(across(starts_with("genre"), str_to_lower)) |> 
-  #   filter(!is.na(woj_bcid) & !is.na(genre_2_nl))
-  # 
-  # woj_gidsinfo.3g2NL <- woj_gidsinfo.3g2 |> 
-  #   left_join(tit2ids.2NL, by = join_by(tit_nl == name_cln, genre_2_nl == db_genre))
-  # 
-  # woj_gidsinfo.3g2EN <- woj_gidsinfo.3g2 |> 
-  #   left_join(tit2ids.2EN, by = join_by(tit_en == name_cln, genre_2_nl == db_genre))
-  # 
-  # woj_gidsinfo <- woj_gidsinfo.3g1EN |> 
-  #   bind_rows(woj_gidsinfo.3g1NL) |> 
-  #   bind_rows(woj_gidsinfo.3g2NL) |> 
-  #   bind_rows(woj_gidsinfo.3g2EN) 
-  # 
-  # woj_gidsinfo_pvt <- woj_gidsinfo |> 
-  #   pivot_wider(names_from = lng_code, values_from = c(slug, wp_title_id, wp_genre_id))
+
+  woj_gidsinfo.4 <- woj_gidsinfo.2 |> inner_join(woj_gidsinfo.3, by = join_by(woj_bcid == bcid))
   
   #  + . check id's complete ----
   woj_gidsinfo_err <- woj_gidsinfo_pvt |> filter(if_any(starts_with("wp_"), is.na))

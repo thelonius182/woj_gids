@@ -196,9 +196,18 @@ url_encode_param <- function(value) {
   URLencode(as.character(value), reserved = TRUE)
 }
 
-woj_ids <- function(pm_what, pm_title, pm_genre, pm_lang) {
+woj_ids <- function(pm_title, pm_genre, pm_lang) {
   
-  out <- tit2ids.2 |> filter(name_cln == pm_title & db_genre == pm_genre & lng_code == pm_lang) 
+  out <- tit2ids.2 |> filter(name_cln == pm_title & db_genre == pm_genre & lng_code == pm_lang) |> 
+    select(wp_title_id, wp_genre_id)
+  flog.info(sprintf("title = %s, genre = %s, lang = %s, tid = %d, gid = %d",
+                    pm_title, pm_genre, pm_lang, out$wp_title_id, out$wp_genre_id), 
+            name = "wojsch")  
   
-  if (pm_what == "T") out$wp_title_id else out$wp_genre_id
+  if(nrow(out) == 0) {
+    out <- tribble(~wp_title_id, ~wp_genre_id,
+                   -1L,          -1L)
+  }
+
+  return(out)
 }

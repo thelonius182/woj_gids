@@ -1,5 +1,5 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-# Create WoJ schedules and tracklists
+# Create WoJ schedules, WP-posts and tracklists
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
 
 # INIT ----
@@ -18,7 +18,7 @@ repeat {
   source("src/functions.R", encoding = "UTF-8")
   config <- read_yaml("config.yaml")
   lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-  flog.info("= = = = = START - WoJ Schedules, version 2024-06-18.1 = = = = =", name = "wojsch")
+  flog.info("= = = = = START - WoJ Schedules, version 2024-06-20 = = = = =", name = "wojsch")
   flog.info(sprintf("using db = %s", config$wpdb_env), name = "wojsch")
   
   # say Hello to Gmail
