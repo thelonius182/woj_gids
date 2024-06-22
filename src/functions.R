@@ -2,20 +2,21 @@
 # TO VALIDATE CONN:
 # sqlstmt <- "show variables like 'character_set_client'"
 # result <- dbGetQuery(conn = wp_conn, statement = sqlstmt)
-get_wp_conn <- function(pm_db_type = "prd") {
+get_wp_conn <- function() {
+# get_wp_conn <- function(pm_db_type = "prd") {
 
-  if (pm_db_type == "prd") {
-    db_host <- key_get(service = paste0("sql-wp", pm_db_type, "_host"))
-    db_user <- key_get(service = paste0("sql-wp", pm_db_type, "_user"))
-    db_password <- key_get(service = paste0("sql-wp", pm_db_type, "_pwd"))
-    db_name <- key_get(service = paste0("sql-wp", pm_db_type, "_db"))
-  } else {
-    woj_gids_creds_dev <- read_rds(config$db_dev_creds)
-    db_host <- woj_gids_creds_dev$db_host
-    db_user <- woj_gids_creds_dev$db_user
-    db_password <- woj_gids_creds_dev$db_password
-    db_name <- woj_gids_creds_dev$db_name
-  }
+  # if (pm_db_type == "prd") {
+  #   db_host <- key_get(service = paste0("sql-wp", pm_db_type, "_host"))
+  #   db_user <- key_get(service = paste0("sql-wp", pm_db_type, "_user"))
+  #   db_password <- key_get(service = paste0("sql-wp", pm_db_type, "_pwd"))
+  #   db_name <- key_get(service = paste0("sql-wp", pm_db_type, "_db"))
+  # } else {
+  #   woj_gids_creds_dev <- read_rds(config$db_dev_creds)
+  #   db_host <- woj_gids_creds_dev$db_host
+  #   db_user <- woj_gids_creds_dev$db_user
+  #   db_password <- woj_gids_creds_dev$db_password
+  #   db_name <- woj_gids_creds_dev$db_name
+  # }
 
   db_port <- 3306
   # flog.appender(appender.file("/Users/nipper/Logs/nipper.log"), name = "nipperlog")
@@ -200,9 +201,9 @@ woj_ids <- function(pm_title, pm_genre, pm_lang) {
   
   out <- tit2ids.2 |> filter(name_cln == pm_title & db_genre == pm_genre & lng_code == pm_lang) |> 
     select(wp_title_id, wp_genre_id)
-  flog.info(sprintf("title = %s, genre = %s, lang = %s, tid = %d, gid = %d",
-                    pm_title, pm_genre, pm_lang, out$wp_title_id, out$wp_genre_id), 
-            name = "wojsch")  
+  # flog.info(sprintf("title = %s, genre = %s, lang = %s, tid = %d, gid = %d",
+  #                   pm_title, pm_genre, pm_lang, out$wp_title_id, out$wp_genre_id), 
+  #           name = "wojsch")  
   
   if(nrow(out) == 0) {
     out <- tribble(~wp_title_id, ~wp_genre_id,

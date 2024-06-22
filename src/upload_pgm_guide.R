@@ -5,7 +5,7 @@ salsa_source_error <- T
 repeat {
   
   # update import-hash ----
-  wp_conn <- get_wp_conn(config$wpdb_env)
+  wp_conn <- get_wp_conn()
   
   if (typeof(wp_conn) != "S4") {
     flog.error(sprintf("connecting to wordpress-DB (%s) failed", config$wpdb_env), name = "wojsch")
@@ -19,7 +19,7 @@ repeat {
   sql_sts <- dbDisconnect(wp_conn)
   
   # use the latest pgm guide uploaded
-  qfns <- dir_ls(path = "C:/cz_salsa/gidsweek_uploaden/", 
+  qfns <- dir_ls(path = config$home_upload_gidsweek, 
                  type = "file",
                  regexp = "WJ_gidsweek_\\d{4}.*[.]json$") |> sort(decreasing = T)
   json_data <- fromJSON(qfns[1])

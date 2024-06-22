@@ -125,7 +125,7 @@ repeat {
 
   # get title-to-term-ids mapping ----
   # + \ connect WP-db ----  
-  wp_conn <- get_wp_conn(config$wpdb_env)
+  wp_conn <- get_wp_conn()
   
   if (typeof(wp_conn) != "S4") {
     flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
@@ -177,10 +177,19 @@ repeat {
   woj_gidsinfo.4 <- woj_gidsinfo.2 |> inner_join(woj_gidsinfo.3, by = join_by(woj_bcid == bcid))
   
   #  + . check id's complete ----
-  woj_gidsinfo_err <- woj_gidsinfo_pvt |> filter(if_any(starts_with("wp_"), is.na))
+  #  + \ primairy ----
+  woj_gidsinfo_err <- woj_gidsinfo.4 |> filter(tid_n1 == -1 | gid_n1 == -1)
   
   if (nrow(woj_gidsinfo_err) > 0) {
-    flog.error("Missing title/genre-id's; WP/Genre and GD/WP-gidsinfo don't match", name = "wojsch")
+    flog.error("Missing title/genre-1 id's", name = "wojsch")
+    flog.error(sprintf("errors = %s", str_flatten_comma(woj_gidsinfo_err$tit_nl)), name = "wojsch")
+    break
+  }
+  #  + \ secondary ----
+  woj_gidsinfo_err <- woj_gidsinfo.4 |> filter(!is.na(genre_2_nl) & (tid_n2 == -1 | gid_n2 == -1))
+  
+  if (nrow(woj_gidsinfo_err) > 0) {
+    flog.error("Missing title/genre-2 id's", name = "wojsch")
     flog.error(sprintf("errors = %s", str_flatten_comma(woj_gidsinfo_err$tit_nl)), name = "wojsch")
     break
   }
@@ -200,7 +209,7 @@ repeat {
   
   # combine with 'wp-gidsinfo' ----
   cz_week_sched.2 <- cz_week_sched.1 |> 
-    inner_join(woj_gidsinfo_pvt, by = join_by(broadcast_id == woj_bcid))
+    inner_join(woj_gidsinfo.4, by = join_by(broadcast_id == woj_bcid))
   
   #  + . check schedule length ----
   if (sum(cz_week_sched.2$minutes) != 10080) {
@@ -256,7 +265,7 @@ repeat {
   
   # + . save it ----
   # so 'add_ml_tracklists_to_wp' can use it later
-  write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
+  write_rds(cz_week_sched.3, config$wj_gidsweek_backup)
   
   # WoJ Audio Allocation Sheet ----
   flog.info("create audio allocation sheet", name = "wojsch")
@@ -307,12 +316,12 @@ repeat {
     rule = rule_checkbox
   )
   
-  flog.info("WJ-playistweek has been replaced on GD", name = "wojsch")
-  
   # + store local copy ----
   woj_playlists_fn <- paste0("WoJ_playlistweek_", format(cz_week_start, "%Y_%m_%d"), ".tsv")
-  woj_playlists_qfn <- path_join(c("C:", "Users", "nipper", "Documents", "BasieBeats", woj_playlists_fn))
+  woj_playlists_qfn <- path_join(c(config$home_playlistweek_backup, woj_playlists_fn))
   write_tsv(plw_items, woj_playlists_qfn)
+  
+  flog.info("WJ-playistweek has been backed up and replaced on GD", name = "wojsch")
   
   # WoJ Programme Guide ----
   flog.info("create programme guide", name = "wojsch")
@@ -320,8 +329,7 @@ repeat {
   # . + prep json ----
   # . \ originals with 1 genre ----
   tib_json_ori_gen1 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & is.na(genre_2_nl)) |> 
-    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
-           starts_with("wp_"), broadcast_id) |> 
+    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:gid_e2, -ends_with("2"), broadcast_id) |> 
     mutate(obj_name = fmt_utc_ts(slot_ts), 
            stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
            start = format(slot_ts, "%Y-%m-%d %H:%M"),
@@ -329,10 +337,10 @@ repeat {
            `upload-batch` = paste("bcid", broadcast_id, sep = "-")) |> 
     select(obj_name, `post-type`, feat_img_id, start, stop, everything(), 
            -minutes, -slot_ts, -broadcast_id) |> 
-    rename(`titel-nl` = wp_title_id_nl,
-           `titel-en` = wp_title_id_en,
-           `genre-1-nl` = wp_genre_id_nl,
-           `genre-1-en` = wp_genre_id_en,
+    rename(`titel-genre-1-nl` = tid_n1,
+           `titel-genre-1-en` = tid_e1,
+           `genre-1-nl` = gid_n1,
+           `genre-1-en` = gid_e1,
            `samenvatting-nl` = txt_nl,
            `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,
@@ -344,10 +352,8 @@ repeat {
     str_replace_all(pattern = '    "featured-image": (0|"NA"),\\n', '')
   
   # . \ originals with 2 genres ----
-  # tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
-  tib_json_ori_gen2 <- cz_week_sched.3 |> filter(!is.na(genre_2_nl)) |> 
-    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:feat_img_id, 
-           starts_with("wp_"), broadcast_id) |> 
+  tib_json_ori_gen2 <- cz_week_sched.3 |> filter(is.na(ts_rewind) & !is.na(genre_2_nl)) |> 
+    select(slot_ts, minutes, prod_taak_nl:prod_mdw, txt_nl:gid_e2, broadcast_id) |> 
     mutate(obj_name = fmt_utc_ts(slot_ts), 
            stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
            start = format(slot_ts, "%Y-%m-%d %H:%M"),
@@ -355,12 +361,14 @@ repeat {
            `upload-batch` = paste("bcid", broadcast_id, sep = "-")) |> 
     select(obj_name, `post-type`, feat_img_id, start, stop, everything(), 
            -minutes, -slot_ts, -broadcast_id) |> 
-    rename(`titel-nl` = wp_title_id_nl,
-           `titel-en` = wp_title_id_en,
-           `genre-1-nl` = wp_genre_id_nl,
-           `genre-1-en` = wp_genre_id_en,
-           `genre-2-nl` = wp_genre_id_nl,
-           `genre-1-en` = wp_genre_id_en,
+    rename(`titel-genre-1-nl` = tid_n1,
+           `titel-genre-1-en` = tid_e1,
+           `titel-genre-2-nl` = tid_n2,
+           `titel-genre-2-en` = tid_e2,
+           `genre-1-nl` = gid_n1,
+           `genre-1-en` = gid_e1,
+           `genre-2-nl` = gid_n2,
+           `genre-2-en` = gid_e2,
            `samenvatting-nl` = txt_nl,
            `samenvatting-en` = txt_en,
            `featured-image` = feat_img_id,
@@ -403,7 +411,7 @@ repeat {
   
   # . \ store it ----
   final_json_ufn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
-  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_ufn)), 
+  write_file(temp_json_file.2, path_join(c(config$home_upload_gidsweek, final_json_ufn)), 
              append = F)
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")

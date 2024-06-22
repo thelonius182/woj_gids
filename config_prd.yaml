@@ -1,0 +1,15 @@
+db_dev_creds: C:/Users/nipper/cz_rds_store/branches/cz_gdrive/woj_gids_creds_dev.RDS
+log_file: C:/Users/nipper/Logs/woj_schedules.log
+wp_endpoint: https://wpdev3.concertzender.nl/wp-admin/admin-ajax.php
+email_from: cz.teamservice@gmail.com
+email_to_A: lcavdakker@gmail.com
+email_to_B: sem@concertzender.nl
+email_auth_path: cz-studiomails.json
+ss_woj_modelrooster: 1LdBjK5hcpl8m1ZdcZujWWcsx7nLJPY8Gt69mjN8QS9A
+ss_gidsinfo: 16DrvLEXi3mEa9AbSw28YBkYpCvyO1wXwBwaNi7HpBkA
+ss_lacie: 1d8t8ZItwfBpdVrB9lyc83-F8NysdHRDpgnw-TJ9G2ng
+ss_wj_playlistweek: 1OoQdHgpb6Yr3L7awSt2Ek5oz4TIegQq4YcFUALykB_E
+wpdb_env: prd
+wj_gidsweek_backup: C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS
+home_upload_gidsweek: C:/cz_salsa/gidsweek_uploaden
+home_playlistweek_backup: C:/Users/nipper/Documents/BasieBeats

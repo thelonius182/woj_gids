@@ -16,7 +16,7 @@ salsa_source_main <- T
 repeat {
   
   source("src/functions.R", encoding = "UTF-8")
-  config <- read_yaml("config.yaml")
+  # config <- read_yaml("config.yaml")
   lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
   flog.info("= = = = = START - WoJ Schedules, version 2024-06-20 = = = = =", name = "wojsch")
   flog.info(sprintf("using db = %s", config$wpdb_env), name = "wojsch")

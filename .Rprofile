@@ -1,14 +1,24 @@
-check_git_branch <- function() {
+message(sprintf("using .Rprofile in %s", getwd()))
+
+get_git_branch <- function() {
+  system("git rev-parse --abbrev-ref HEAD", intern = TRUE)
+}
+
+set_config <- function() {
   
-  if (file.exists(".git")) {
-    
-    branch <- system("git rev-parse --abbrev-ref HEAD", intern = TRUE)
-    
-    if (branch == "main") {
-      message(">>>\n>>>    WARNING: you are on the MAIN BRANCH, normally used for merging only.\n>>>\n")
-    }
+  if (get_git_branch() == "main") {
+    source("src/config_prd.R")
+  } else {
+    source("src/config_dev.R")
   }
 }
 
-message(sprintf("using .Rprofile in %s", getwd()))
+check_git_branch <- function() {
+  
+    if (get_git_branch() == "main") {
+      message(">>>\n>>>    WARNING: you are on the MAIN BRANCH, normally used for merging only.\n>>>\n")
+    }
+}
+
+set_config()
 check_git_branch()
