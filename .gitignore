@@ -3,7 +3,9 @@
 .RData
 .Ruserdata
 woj_gids.Rproj
-config.yaml
 .secret
 .secrets
 cz-studiomails.json
+config_dev.yaml
+config_prd.yaml
+.Rprofile
