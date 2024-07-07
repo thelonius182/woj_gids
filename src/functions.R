@@ -213,3 +213,15 @@ get_wp_ds <- function(pm_env) {
   
   return(result)
 }
+
+salsa_git_version <- function(qfn_repo) {
+  
+  repo <- git2r::repository(qfn_repo)
+  branch <- git2r::repository_head(repo)$name
+  latest_commit <- git2r::commits(repo, n = 1)[[1]]
+  commit_author <- latest_commit$author$name
+  commit_date <- latest_commit$author$when
+  fmt_commit_date <- format(lubridate::with_tz(commit_date, tzone = "Europe/Amsterdam"), "%a %Y-%m-%d, %H:%M")
+  
+  return(list(git_branch = branch, ts = fmt_commit_date, by = commit_author, path = repo$path))
+}
