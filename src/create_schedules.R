@@ -152,7 +152,7 @@ repeat {
   }
   
   # prepare Universe rewinds ----
-  wp_conn <- get_wp_conn(config$wpdb_env)
+  wp_conn <- get_wp_conn()
   
   if (typeof(wp_conn) != "S4") {
     flog.error(sprintf("connecting to wordpress-DB (%s) failed", cur_db_type), name = "wojsch")
@@ -177,12 +177,27 @@ repeat {
     filter(wpdmp_slot_title != "Concertzender Live" | slot_day == "vr22") |> 
     mutate(wpdmp_slot_title = str_to_lower(wpdmp_slot_title))
   
+  # prepare WoJ rewinds ----
+  qry <- "select po1.post_date as wpdmp_slot_ts, 
+                 replace(po1.post_title, '&amp;', '&') as wpdmp_slot_title
+          from wp_posts po1 
+          left join wp_term_relationships tr1 ON tr1.object_id = po1.id                   
+          left join wp_term_taxonomy tx1 ON tx1.term_taxonomy_id = tr1.term_taxonomy_id   
+          where length(trim(po1.post_title)) > 0 
+            and po1.post_type = 'programma_woj' 
+            and tx1.term_taxonomy_id = 5 
+            and po1.post_date > date_add(now(), interval -180 day)
+          order by po1.post_date desc
+          ;"
+  
+  woj_rewinds <- dbGetQuery(wp_conn, qry) |> mutate(slot_day = fmt_slot_day(ymd_hms(wpdmp_slot_ts))) |> 
+    mutate(wpdmp_slot_title = str_to_lower(wpdmp_slot_title))
+  
   discon_result <- dbDisconnect(wp_conn)
   
   # add rewinds to the schedule
   cz_week_sched.3a <- cz_week_sched.2 |> rowwise() |> 
-    mutate(ts_rewind = list(get_ts_rewind(cz_week_start, slot_ts, str_to_lower(tit_nl), 
-                                          broadcast_type, live))) |> 
+    mutate(ts_rewind = list(get_ts_rewind(cz_week_start, slot_ts, str_to_lower(tit_nl), broadcast_type, live))) |> 
     unnest_wider(ts_rewind) |> select(slot_ts, minutes, ts_rewind, audio_src, everything()) |> ungroup() |> 
     mutate(key_ts = as.integer(slot_ts))
   
@@ -206,33 +221,39 @@ repeat {
   
   # + . save it ----
   # so 'add_ml_tracklists_to_wp' can use it later
-  write_rds(cz_week_sched.3, "C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
+  write_rds(cz_week_sched.3, config$wj_gidsweek_backup)
   
   # WoJ Audio Allocation Sheet ----
   flog.info("create audio allocation sheet", name = "wojsch")
   plw_items <- cz_week_sched.3 |> 
     filter(broadcast_type != "NonStop") |> 
     select(slot_ts, broadcast_id, tit_nl, broadcast_type, ts_rewind, 
-           audio_src, mac, live_op_universe = live, audio_file) |> 
-    mutate(live_op_universe = if_else(broadcast_type == "WorldOfJazz", "nvt", live_op_universe)) |>
+           audio_src, mac, orig_bc_live = live, audio_file) |> 
+    mutate(orig_bc_live = if_else(broadcast_type == "NonStop", "nvt", orig_bc_live)) |>
     mutate(uitzending = format(slot_ts, "%Y-%m-%d_%a%Hu"),
            titel = tit_nl,
            universe_slot = format(ts_rewind, "%Y-%m-%d_%a%Hu"),
            bron = case_when(broadcast_type == "LaCie" ~ 
-                              paste0("hernoemde herhaling op WoJ-pc: ", audio_file),
-                            broadcast_type == "WorldOfJazz" ~ "originele montage op WoJ-pc",
+                              paste0("de hernoemde herhaling op de WoJ-pc, ", audio_file),
+                            broadcast_type == "WorldOfJazz" ~ "nieuwe aflevering, een montage op de WoJ-pc",
                             broadcast_type == "Universe" & audio_src == "Universe" ~ 
                               paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                     ", originele montage op ",
+                                     ", de oorspronkelijke montage op de ",
                                      mac),
-                            broadcast_type == "Universe" & audio_src == "HiJack" & live_op_universe == "Y" ~ 
+                            broadcast_type == "Universe" & audio_src == "HiJack" & orig_bc_live == "Y" ~ 
                               paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                     ", HiJack op ",
+                                     ", de HiJack-file op de ",
                                      mac),
-                            broadcast_type == "Universe" & audio_src == "HiJack" & live_op_universe == "N" ~ 
+                            broadcast_type == "Universe" & audio_src == "HiJack" & orig_bc_live == "N" ~ 
                               paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
-                                     ", HiJack of originele montage op ",
+                                     ", de HiJack-file of de oorspronkelijke montage op de ",
                                      mac),
+                            broadcast_type == "ReplayWoJ" & audio_src == "HiJack" & orig_bc_live == "Y" ~ 
+                              paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"), 
+                                     ", de WoJ HiJack-file"),
+                            broadcast_type == "ReplayWoJ" & audio_src == "HiJack" & orig_bc_live == "N" ~ 
+                              paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),
+                                     ", de WoJ HiJack-file of de oorspronkelijke montage op de WoJ-pc"),
                             T ~ "todo"),
            gereed = F, bijzonderheden = " ") |> select(uitzending, titel, bron, gereed, bijzonderheden)
   
@@ -261,7 +282,7 @@ repeat {
   
   # + store local copy ----
   woj_playlists_fn <- paste0("WoJ_playlistweek_", format(cz_week_start, "%Y_%m_%d"), ".tsv")
-  woj_playlists_qfn <- path_join(c("C:", "Users", "nipper", "Documents", "BasieBeats", woj_playlists_fn))
+  woj_playlists_qfn <- path_join(c(config$home_playlistweek_backup, woj_playlists_fn))
   write_tsv(plw_items, woj_playlists_qfn)
   
   # WoJ Programme Guide ----
@@ -318,14 +339,14 @@ repeat {
   
   # . + replays ----
   tib_json_rep <- cz_week_sched.3 |> filter(!is.na(ts_rewind)) |> 
-    select(slot_ts, minutes, ts_rewind) |> 
+    select(slot_ts, minutes, ts_rewind, broadcast_type) |> 
     mutate(obj_name = fmt_utc_ts(slot_ts), 
            stop = format(slot_ts + minutes(minutes), "%Y-%m-%d %H:%M"),
            start = format(slot_ts, "%Y-%m-%d %H:%M"),
            `post-type` = "programma_woj",
-           `herhaling-van-post-type` = "programma",
+           `herhaling-van-post-type` = if_else(broadcast_type == "ReplayWoJ", "programma_woj", "programma"),
            `herhaling-van` = format(ts_rewind, "%Y-%m-%d %H:%M")) |> 
-    select(obj_name, `post-type`, start, stop, everything(), -minutes, -ts_rewind)
+    select(obj_name, `post-type`, start, stop, everything(), -minutes, -ts_rewind, -broadcast_type)
   
   json_rep <- woj2json(tib_json_rep)
   
@@ -346,7 +367,7 @@ repeat {
   
   # . + store it ----
   final_json_fn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
-  write_file(temp_json_file.2, path_join(c("C:", "cz_salsa", "gidsweek_uploaden", final_json_fn)), 
+  write_file(temp_json_file.2, path_join(c(config$home_upload_gidsweek, final_json_fn)), 
              append = F)
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")
