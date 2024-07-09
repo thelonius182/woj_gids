@@ -137,6 +137,8 @@ get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_typ
   
   if (cur_ts_rewind$value < pm_week_start) {
     cur_audio_src <- "HiJack"
+  } else if (pm_broadcast_type == "Universe") {
+    cur_audio_src <- "Universe"
   } else {
     cur_audio_src <- "WorldOfJazz"
   }

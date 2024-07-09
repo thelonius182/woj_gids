@@ -367,10 +367,11 @@ repeat {
   
   # . + store it ----
   final_json_fn <- paste0("WJ_gidsweek_", format(cz_week_start, "%Y_%m_%d"), ".json")
-  write_file(temp_json_file.2, path_join(c(config$home_upload_gidsweek, final_json_fn)), 
-             append = F)
+  final_json_qfn <- path_join(c(config$home_upload_gidsweek, final_json_fn))
+  write_file(temp_json_file.2, final_json_qfn, append = F)
   
   flog.info("WJ-gidsweek is now ready for upload to WP", name = "wojsch")
+  flog.info(sprintf("file = %s", final_json_qfn), name = "wojsch")
   
   # exit cleanly from main control loop
   rm(salsa_source_error)
