@@ -7,19 +7,22 @@ pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gm
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted)
 
 conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
+source("src/functions.R", encoding = "UTF-8")
+lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
+git_info <- salsa_git_version(getwd())
+flog.info(">>> START", name = "wojsch")
+flog.info(sprintf("git-branch: %s", git_info$git_branch), name = "wojsch")
+flog.info(sprintf("  commited: %s", git_info$ts), name = "wojsch")
+flog.info(sprintf("        by: %s", git_info$by), name = "wojsch")
+flog.info(sprintf("local repo: %s", git_info$path), name = "wojsch")
+flog.info(sprintf("  using db: %s", config$wpdb_env), name = "wojsch")
 
 # signal to 'add_ml_tracklists_to_wp' it will be called from 'main'. 
 # That will tell it to create a new week, instead of refreshing the most recent week
 salsa_source_main <- T
 
-# enter main control loop
+# main control loop
 repeat {
-  
-  source("src/functions.R", encoding = "UTF-8")
-  config <- read_yaml("config.yaml")
-  lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-  flog.info(">>> START", name = "wojsch")
-  flog.info(sprintf("using db = %s", config$wpdb_env), name = "wojsch")
   
   # say Hello to Gmail
   n_errors <- tryCatch(
@@ -36,7 +39,7 @@ repeat {
   )
   
   if (n_errors > 0) {
-    flog.info("= = = = = STOP  = = = = = = = = = = = = = = = = = = = = = = = =", name = "wojsch")
+    flog.info("<<< STOP", name = "wojsch")
     stop("Accessing Gmail failed")
   }
   
@@ -53,7 +56,7 @@ repeat {
   } 
   
   # create schedules ----
-  source("src/create_schedules_v3.R", encoding = "UTF-8")
+  source("src/create_schedules.R", encoding = "UTF-8")
   
   if (exists("salsa_source_error")) {
     break

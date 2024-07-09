@@ -22,7 +22,7 @@ if (!exists("salsa_source_main")) {
 
 repeat {
   # connect to wordpress-DB ----
-  wp_conn <- get_wp_conn(config$wpdb_env)
+  wp_conn <- get_wp_conn()
   
   if (typeof(wp_conn) != "S4") {
     flog.error(sprintf("connecting to wordpress-DB (%s) failed", config$wpdb_env), name = "wojsch")
@@ -82,7 +82,7 @@ repeat {
     arrange(slot, pos)
   
   # get the WordPress playlists
-  wj_gidsweek <- read_rds("C:/Users/nipper/cz_rds_store/branches/cz_gdrive/wj_gidsweek.RDS")
+  wj_gidsweek <- read_rds(config$wj_gidsweek_backup)
   wp_playlists <- wj_gidsweek |> select(slot_ts, start, minutes, tit_nl, broadcast_type, txt_nl, txt_en)
   
   # limit to NonStop

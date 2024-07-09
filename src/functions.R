@@ -2,20 +2,8 @@
 # TO VALIDATE CONN:
 # sqlstmt <- "show variables like 'character_set_client'"
 # result <- dbGetQuery(conn = wp_conn, statement = sqlstmt)
-get_wp_conn <- function(pm_db_type = "prd") {
+get_wp_conn <- function() {
 
-  if (pm_db_type == "prd") {
-    db_host <- key_get(service = paste0("sql-wp", pm_db_type, "_host"))
-    db_user <- key_get(service = paste0("sql-wp", pm_db_type, "_user"))
-    db_password <- key_get(service = paste0("sql-wp", pm_db_type, "_pwd"))
-    db_name <- key_get(service = paste0("sql-wp", pm_db_type, "_db"))
-  } else {
-    woj_gids_creds_dev <- read_rds(config$db_dev_creds)
-    db_host <- woj_gids_creds_dev$db_host
-    db_user <- woj_gids_creds_dev$db_user
-    db_password <- woj_gids_creds_dev$db_password
-    db_name <- woj_gids_creds_dev$db_name
-  }
 
   db_port <- 3306
   # flog.appender(appender.file("/Users/nipper/Logs/nipper.log"), name = "nipperlog")
@@ -26,8 +14,6 @@ get_wp_conn <- function(pm_db_type = "prd") {
                 dbname = db_name, host = db_host, port = db_port)
     },
     error = function(cond) {
-      cat("Wordpress database connection failed (dev: is PuTTY running?)")
-      # flog.error("Wordpress database onbereikbaar (dev: check PuTTY)", name = "nipperlog")
       return("connection-error")
     }
   )
@@ -123,10 +109,16 @@ get_mal_conn <- function() {
 
 get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_type, pm_live) {
   
-  # Universe-slots only
-  if (pm_broadcast_type != "Universe") return(list(ts_rewind = NA_Date_, audio_src = NA_character_))
+  # WoJ replay-slots only
+  if (pm_broadcast_type == "Universe") {
+    tib_rewinds <- universe_rewinds
+  } else if (pm_broadcast_type == "ReplayWoJ") {
+    tib_rewinds <- woj_rewinds
+  } else {
+    return(list(ts_rewind = NA_Date_, audio_src = NA_character_))
+  }
   
-  # this week's Universe live broadcasts need a HiJack-file (previous week)
+  # this week's WoJ live broadcasts need a HiJack-file (previous week)
   if (pm_live == "Y") {
     ymd_upper_limit <- pm_week_start
   } else {
@@ -134,7 +126,7 @@ get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_typ
   }
   
   # get the rewind of this broadcast closest to its slot
-  cur_ts_rewind <- universe_rewinds |> 
+  cur_ts_rewind <- tib_rewinds |> 
     filter(wpdmp_slot_title == pm_tit_nl & wpdmp_slot_ts < ymd_upper_limit) |> 
     arrange(desc(wpdmp_slot_ts)) |> head(1) |> select(value = wpdmp_slot_ts)
   
@@ -146,7 +138,7 @@ get_ts_rewind <- function(pm_week_start, pm_slot_ts, pm_tit_nl, pm_broadcast_typ
   if (cur_ts_rewind$value < pm_week_start) {
     cur_audio_src <- "HiJack"
   } else {
-    cur_audio_src <- "Universe"
+    cur_audio_src <- "WorldOfJazz"
   }
   
   return(list(ts_rewind = ymd_hms(cur_ts_rewind$value), audio_src = cur_audio_src))
