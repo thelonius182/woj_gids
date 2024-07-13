@@ -167,9 +167,10 @@ repeat {
         str_replace_all(sql_gidstekst3, "[']", "&apos;"),
         dsSql01$id[u1]
       )
-
+      
       n_wp_rows <- dbExecute(wp_conn, upd_stmt02)
       tot_wp_rows <- tot_wp_rows + n_wp_rows
+      flog.info(sprintf("updates cur/tot = %d/%d", n_wp_rows, tot_wp_rows), name = config$log_slug)
     }
   }
 
