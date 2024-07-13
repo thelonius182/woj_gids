@@ -36,7 +36,7 @@ repeat {
   sq_cur_week_start = tmp_format(cur_week_start)
   sq_cur_week_stop = tmp_format(cur_week_stop)
   flog.info(sprintf("current week start = %s", sq_cur_week_start), name = config$log_slug)
-  flog.info(sprintf("current week stop = %s", sq_cur_week_stop), name = config$log_slug)
+  flog.info(sprintf("current week stop  = %s", sq_cur_week_stop), name = config$log_slug)
 
   qry <- sprintf("
      select pl.slot
@@ -50,7 +50,7 @@ repeat {
      join items it on it.idx = pl.item
      left join item_attributes ia on ia.item = pl.item
      where pl.slot between '%s' and '%s'
-     	 and it.storage not in (10, 11, 17) -- no Bumpers, no Semi-live's
+     	 and it.storage not in (10, 11, 17, 21) -- no Bumpers, Semi-live's or Promo's
      order by pl.slot, pl.pos asc;",
      sq_cur_week_start, sq_cur_week_stop
   )

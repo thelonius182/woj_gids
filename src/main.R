@@ -3,15 +3,15 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # INIT ----
-source("src/functions.R", encoding = "UTF-8")
-lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-git_info <- salsa_git_version(getwd())
-flog.info(">>> START", name = "wojsch")
-flog.info(sprintf("git-branch: %s", git_info$git_branch), name = "wojsch")
-flog.info(sprintf("  commited: %s", git_info$ts), name = "wojsch")
-flog.info(sprintf("        by: %s", git_info$by), name = "wojsch")
-flog.info(sprintf("local repo: %s", git_info$path), name = "wojsch")
-flog.info(sprintf("  using db: %s", config$wpdb_env), name = "wojsch")
+# source("src/functions.R", encoding = "UTF-8")
+# lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
+# git_info <- salsa_git_version(getwd())
+# flog.info(">>> START", name = "wojsch")
+# flog.info(sprintf("git-branch: %s", git_info$git_branch), name = "wojsch")
+# flog.info(sprintf("  commited: %s", git_info$ts), name = "wojsch")
+# flog.info(sprintf("        by: %s", git_info$by), name = "wojsch")
+# flog.info(sprintf("local repo: %s", git_info$path), name = "wojsch")
+# flog.info(sprintf("  using db: %s", config$wpdb_env), name = "wojsch")
 
 # signal to 'add_ml_tracklists_to_wp' it will be called from 'main'.
 # That will tell it to create a new week, instead of refreshing the most recent week
@@ -21,23 +21,23 @@ salsa_source_main <- T
 repeat {
 
   # say Hello to Gmail
-  n_errors <- tryCatch(
-    {
-      gm_auth_configure(path = config$email_auth_path)
-      gm_auth(cache = ".secret", email = config$email_from)
-      0L
-    },
-    error = function(e1) {
-      flog.error(sprintf("Accessing Gmail failed - can't report results. Msg = %s", conditionMessage(e1)),
-                 name = "wojsch")
-      return(1L)
-    }
-  )
-
-  if (n_errors > 0) {
-    flog.info("<<< STOP", name = "wojsch")
-    stop("Accessing Gmail failed")
-  }
+  # n_errors <- tryCatch(
+  #   {
+  #     gm_auth_configure(path = config$email_auth_path)
+  #     gm_auth(cache = ".secret", email = config$email_from)
+  #     0L
+  #   },
+  #   error = function(e1) {
+  #     flog.error(sprintf("Accessing Gmail failed - can't report results. Msg = %s", conditionMessage(e1)),
+  #                name = "wojsch")
+  #     return(1L)
+  #   }
+  # )
+  #
+  # if (n_errors > 0) {
+  #   flog.info("<<< STOP", name = "wojsch")
+  #   stop("Accessing Gmail failed")
+  # }
 
   # create time series ----
   # cz-week's 168 hours comprise 8 weekdays, not 7 (Thursday AM and PM)
@@ -86,14 +86,14 @@ if (exists("salsa_source_error")) {
 }
 
 # report the result ----
-woj_task_report <- gm_mime() |>
-  # gm_to(c(config$email_to_A, config$email_to_B)) |>
-  gm_to(config$email_to_A) |>
-  gm_from(config$email_from) |>
-  gm_subject("WorldOfJazz Weektaak") |>
-  gm_text_body(report_msg)
-
-rtn <- gm_send_message(woj_task_report)
-
-flog.info("<<< STOP
-", name = "wojsch")
+# woj_task_report <- gm_mime() |>
+#   # gm_to(c(config$email_to_A, config$email_to_B)) |>
+#   gm_to(config$email_to_A) |>
+#   gm_from(config$email_from) |>
+#   gm_subject("WorldOfJazz Weektaak") |>
+#   gm_text_body(report_msg)
+#
+# rtn <- gm_send_message(woj_task_report)
+#
+# flog.info("<<< STOP
+# ", name = "wojsch")

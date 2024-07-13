@@ -1,6 +1,6 @@
 message("using PRD-config")
 
-pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, gmailr, RPostgres,
+pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, RPostgres,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted)
 
 conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
