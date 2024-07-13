@@ -90,6 +90,8 @@ repeat {
   wp_playlists.3 <- wp_playlists.2 |> filter(plid == 1)
 
   # prep de gids ----
+  tot_wp_rows <- 0
+  
   for (cur_pl_label in wp_playlists.3$pl_label) {
 
     cur_pl.1 <- wp_playlists.2 |> filter(pl_label == cur_pl_label)
@@ -166,11 +168,13 @@ repeat {
         dsSql01$id[u1]
       )
 
-      upd_result <- dbExecute(wp_conn, upd_stmt02)
+      n_wp_rows <- dbExecute(wp_conn, upd_stmt02)
+      tot_wp_rows <- tot_wp_rows + n_wp_rows
     }
   }
 
   discon_result <- dbDisconnect(wp_conn)
+  flog.info(sprintf("total posts updated = %d", tot_wp_rows), name = config$log_slug)
 
   # exit from main control loop
   break
