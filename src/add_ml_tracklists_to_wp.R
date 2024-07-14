@@ -1,8 +1,8 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Sync non-stop ML-tracklists in WP-posts
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 flog.info("sync non-stop tracklists", name = config$log_slug)
+conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
 
 # create time series? ----
 # only when called to refresh
@@ -12,6 +12,7 @@ if (!exists("salsa_source_main")) {
 }
 
 repeat {
+  
   # connect to wordpress-DB ----
   wp_conn <- get_wp_conn()
 
@@ -91,9 +92,8 @@ repeat {
 
   # prep de gids ----
   tot_wp_rows <- 0
-  
-  for (cur_pl_label in wp_playlists.3$pl_label) {
 
+  for (cur_pl_label in wp_playlists.3$pl_label) {
     cur_pl.1 <- wp_playlists.2 |> filter(pl_label == cur_pl_label)
     min_slot_ts <- min(cur_pl.1$slot_ts)
     cur_pl <- cur_pl.1 |>
@@ -170,7 +170,6 @@ repeat {
       
       n_wp_rows <- dbExecute(wp_conn, upd_stmt02)
       tot_wp_rows <- tot_wp_rows + n_wp_rows
-      flog.info(sprintf("updates cur/tot = %d/%d", n_wp_rows, tot_wp_rows), name = config$log_slug)
     }
   }
 

@@ -3,8 +3,6 @@ message("using DEV-config")
 pacman::p_load(googledrive, googlesheets4, dplyr, tidyr, lubridate, fs, uuid, RPostgres,
                stringr, yaml, readr, rio, RMySQL, keyring, jsonlite, futile.logger, conflicted)
 
-conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
-
 source("src/functions.R", encoding = "UTF-8")
 config <- read_yaml("config_dev.yaml")
 

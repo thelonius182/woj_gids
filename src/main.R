@@ -2,16 +2,7 @@
 # Create WoJ schedules, WP-posts and tracklists
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# INIT ----
-# source("src/functions.R", encoding = "UTF-8")
-# lg_ini <- flog.appender(appender.file(config$log_file), "wojsch")
-# git_info <- salsa_git_version(getwd())
-# flog.info(">>> START", name = "wojsch")
-# flog.info(sprintf("git-branch: %s", git_info$git_branch), name = "wojsch")
-# flog.info(sprintf("  commited: %s", git_info$ts), name = "wojsch")
-# flog.info(sprintf("        by: %s", git_info$by), name = "wojsch")
-# flog.info(sprintf("local repo: %s", git_info$path), name = "wojsch")
-# flog.info(sprintf("  using db: %s", config$wpdb_env), name = "wojsch")
+conflicts_prefer(dplyr::lag, dplyr::lead, dplyr::filter, lubridate::minutes, .quiet = T)
 
 # signal to 'add_ml_tracklists_to_wp' it will be called from 'main'.
 # That will tell it to create a new week, instead of refreshing the most recent week
