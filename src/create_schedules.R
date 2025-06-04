@@ -221,7 +221,7 @@ repeat {
   
   # + . save it ----
   # so 'add_ml_tracklists_to_wp' can use it later; save last week's instance first!
-  file_copy(config$wj_gidsweek_backup, str_replace(config$wj_gidsweek_backup, "wj_gidsweek", "wj_prev_gidsweek"))
+  file_copy(config$wj_gidsweek_backup, str_replace(config$wj_gidsweek_backup, "wj_gidsweek", "wj_prev_gidsweek"), overwrite = T)
   write_rds(cz_week_sched.3, config$wj_gidsweek_backup)
   
   # WoJ Audio Allocation Sheet ----

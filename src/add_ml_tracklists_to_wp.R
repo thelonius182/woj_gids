@@ -55,7 +55,15 @@ repeat {
      order by pl.slot, pl.pos asc;",
      sq_cur_week_start, sq_cur_week_stop
   )
-
+  
+  # qry <- "
+  #    select distinct it.artist
+  #    from playlist pl
+  #    join items it on it.idx = pl.item
+  #    left join item_attributes ia on ia.item = pl.item
+  #    where it.storage not in (10, 11, 17, 21) -- no Bumpers, Semi-live's or Promo's
+  #    order by 1;"
+  
   ml_tracks <- dbGetQuery(mal_conn, qry)
   dbDisconnect(mal_conn)
 
