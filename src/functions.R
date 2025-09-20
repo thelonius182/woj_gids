@@ -218,3 +218,24 @@ salsa_git_version <- function(qfn_repo) {
 
   return(list(git_branch = branch, ts = fmt_commit_date, by = commit_author, path = repo$path))
 }
+
+get_salsa_calendar <- function() {
+  # dynamic start and end
+  start <- floor_date(Sys.Date() %m-% months(6), unit = "day")  # 6 months ago, at midnight
+  end   <- ceiling_date(Sys.Date() %m+% months(6), unit = "day") - seconds(1)  # 6 months ahead, end of day
+
+  # generate hourly sequence
+  calendar <- tibble(
+    datetime_local = seq(from = as.POSIXct(start, tz = "Europe/Amsterdam"),
+                         to   = as.POSIXct(end, tz = "Europe/Amsterdam"),
+                         by   = "1 hour")
+  ) |>
+    mutate(
+      # datetime_amsterdam = with_tz(datetime_utc, tzone = "Europe/Amsterdam"),
+      date_val = as_date(datetime_local),
+      day_of_month = day(datetime_local),
+      weekday = wday(datetime_local, week_start = 1, label = T, abbr = T),
+      hour_local = hour(datetime_local),
+      nth_weekday_in_month = ((day_of_month - 1) %/% 7) + 1
+    )
+}
