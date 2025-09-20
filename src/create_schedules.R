@@ -77,7 +77,7 @@ repeat {
     {
       tib_gidsinfo <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "gids-info")
       tib_gidsvertalingen <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "vertalingen NL-EN")
-      tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.0") |> 
+      tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.1") |> 
         mutate(key_ts = as.integer(bc_woj_ymd))
       0L
     },
