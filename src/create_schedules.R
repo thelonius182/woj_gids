@@ -77,12 +77,12 @@ repeat {
     {
       tib_gidsinfo <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "gids-info")
       tib_gidsvertalingen <- read_sheet(paste0(gs_home, config$ss_gidsinfo), sheet = "vertalingen NL-EN")
-      tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.1") |> 
-        mutate(key_ts = as.integer(bc_woj_ymd))
+      tib_lacie_slots <- read_sheet(paste0(gs_home, config$ss_lacie), sheet = "woj_herhalingen_4.2") |> 
+        mutate(key_ts = as.integer(bc_woj_ts))
       0L
     },
     error = function(e1) {
-      flog.error(sprintf("Failed to get gidsinfo/vertalingen/LaCie-slots: %s", conditionMessage(e1)), 
+      flog.error(sprintf("Failed to get either gidsinfo, vertalingen or LaCie-slots: %s", conditionMessage(e1)), 
                  name = "wojsch")
       return(1L)
     }
@@ -203,15 +203,15 @@ repeat {
   
   # join lacie-slots
   cz_week_sched.3 <- cz_week_sched.3a |> left_join(tib_lacie_slots, join_by(key_ts)) |> 
-    rename(audio_file = `audio file`) |> 
+    rename(audio_file = replay_of_audio_file) |> 
     mutate(audio_file = if_else(!is.na(audio_file), 
                                 audio_file,
                                 str_replace(bc_review, "keep |remove ", "")),
-           replay = round_date(replay, "hour"),
-           ts_rewind = if_else(is.na(ts_rewind) & !is.na(replay),
-                               replay,
+           replay_of = round_date(replay_of, "hour"),
+           ts_rewind = if_else(is.na(ts_rewind) & !is.na(replay_of),
+                               replay_of,
                                ts_rewind)) |> 
-    select(-c(key_ts:bc_review), -bc_orig_id_new) 
+    select(-key_ts, -bc_review, -replay_of_id) 
   
   #  + . check schedule length ----
   if (sum(cz_week_sched.3$minutes) != 10080) {
@@ -235,7 +235,7 @@ repeat {
            titel = tit_nl,
            universe_slot = format(ts_rewind, "%Y-%m-%d_%a%Hu"),
            bron = case_when(broadcast_type == "LaCie" ~ 
-                              paste0("de hernoemde herhaling op de WoJ-pc, ", audio_file),
+                              paste0("herhaling vanaf Synology > WoJ-hh, ", audio_file),
                             broadcast_type == "WorldOfJazz" ~ "nieuwe aflevering, een montage op de WoJ-pc",
                             broadcast_type == "Universe" & audio_src == "Universe" ~ 
                               paste0(format(ts_rewind, "%Y-%m-%d_%a%Hu"),

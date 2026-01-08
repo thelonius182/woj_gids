@@ -156,7 +156,12 @@ repeat {
       sql_post_date
     )
     dsSql01 <- dbGetQuery(wp_conn, upd_stmt01)
-
+    
+    if (nrow(dsSql01) == 0) {
+      flog.error(sprintf("geen gidsvermelding gevonden voor %s", sql_post_date), name = config$log_slug)
+      break
+    }
+    
     # + gidskop bepalen ----
     hdr_nl_df <- cur_pl$txt_nl[[1]]
     hdr_en_df <- cur_pl$txt_en[[1]]
