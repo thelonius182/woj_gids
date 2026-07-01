@@ -106,8 +106,11 @@ repeat {
     min_slot_ts <- min(cur_pl.1$slot_ts)
     cur_pl <- cur_pl.1 |>
       mutate(cum_time = round(cumsum(duration), 0),
-             wall_clock = get_wallclock(min_slot_ts, cum_time)) |>
-      filter(cum_time < 60 * (minutes - 2))
+             wall_clock_start = paste0(hour(cur_pl.1$slot_ts[1]), ":00"),
+             wall_clock_end = get_wallclock(min_slot_ts, cum_time),
+             wall_clock = coalesce(lag(wall_clock_end), wall_clock_start)
+      )
+      # filter(cum_time < 60 * (minutes - 2))
 
     sql_post_date <- cur_pl$slot_ts[[1]] |> as.character()
 
